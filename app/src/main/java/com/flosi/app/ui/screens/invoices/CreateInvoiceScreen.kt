@@ -22,7 +22,21 @@ private data class DraftInvoiceLine(
 )
 
 private fun decimalValue(raw: String): Double? = raw.trim().replace(',', '.').toDoubleOrNull()
-private fun decimalInput(raw: String): String = raw.filter { it.isDigit() || it == '.' || it == ',' }
+private fun decimalInput(raw: String): String {
+    val out=StringBuilder()
+    var separator=false
+    raw.forEach{ch->
+        when{
+            ch.isDigit()->out.append(ch)
+            (ch=='.'||ch==',')&&!separator->{
+                if(out.isEmpty())out.append('0')
+                out.append('.')
+                separator=true
+            }
+        }
+    }
+    return out.toString()
+}
 
 @Composable
 fun CreateInvoiceScreen(onBack:()->Unit){
