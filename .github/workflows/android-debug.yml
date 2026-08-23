@@ -24,8 +24,12 @@ jobs:
         env:
           FLOSI_KEYSTORE_BASE64: ${{ secrets.FLOSI_KEYSTORE_BASE64 }}
         run: |
+          set -euo pipefail
           test -n "$FLOSI_KEYSTORE_BASE64"
-          printf '%s' "$FLOSI_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/flosi-release.keystore"
+          CLEANED="$(printf '%s' "$FLOSI_KEYSTORE_BASE64" | sed 's/^FLOSI_KEYSTORE_BASE64=//' | tr -d '\r\n\t ')"
+          test -n "$CLEANED"
+          printf '%s' "$CLEANED" | base64 --decode > "$RUNNER_TEMP/flosi-release.keystore"
+          test -s "$RUNNER_TEMP/flosi-release.keystore"
 
       - name: Unit tests
         run: gradle --no-daemon testDebugUnitTest --stacktrace
