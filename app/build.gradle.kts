@@ -20,6 +20,17 @@ val flosiGoogleWebClientId = providers.gradleProperty("FLOSI_GOOGLE_WEB_CLIENT_I
     .orElse("897529405735-h0ijqqgoemls5hje4ucrfckcoq49fo27.apps.googleusercontent.com")
     .get()
 
+val flosiStoreFile = System.getenv("FLOSI_STORE_FILE")
+val flosiStorePassword = System.getenv("FLOSI_KEYSTORE_PASSWORD")
+val flosiKeyAlias = System.getenv("FLOSI_KEY_ALIAS")
+val flosiKeyPassword = System.getenv("FLOSI_KEY_PASSWORD")
+val hasFlosiReleaseSigning = listOf(
+    flosiStoreFile,
+    flosiStorePassword,
+    flosiKeyAlias,
+    flosiKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.flosi.app"
     compileSdk = 36
@@ -37,6 +48,25 @@ android {
         buildConfigField("String", "FLOSI_FIREBASE_APP_ID", flosiFirebaseAppId.asBuildConfigString())
         buildConfigField("String", "FLOSI_FIREBASE_PROJECT_ID", flosiFirebaseProjectId.asBuildConfigString())
         buildConfigField("String", "FLOSI_GOOGLE_WEB_CLIENT_ID", flosiGoogleWebClientId.asBuildConfigString())
+    }
+
+    signingConfigs {
+        if (hasFlosiReleaseSigning) {
+            create("flosiRelease") {
+                storeFile = file(flosiStoreFile!!)
+                storePassword = flosiStorePassword
+                keyAlias = flosiKeyAlias
+                keyPassword = flosiKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            if (hasFlosiReleaseSigning) {
+                signingConfig = signingConfigs.getByName("flosiRelease")
+            }
+        }
     }
 
     compileOptions {
