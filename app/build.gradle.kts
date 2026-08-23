@@ -7,10 +7,18 @@ plugins {
 
 fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
-val flosiFirebaseApiKey = providers.gradleProperty("FLOSI_FIREBASE_API_KEY").orElse("").get()
-val flosiFirebaseAppId = providers.gradleProperty("FLOSI_FIREBASE_APP_ID").orElse("").get()
-val flosiFirebaseProjectId = providers.gradleProperty("FLOSI_FIREBASE_PROJECT_ID").orElse("").get()
-val flosiGoogleWebClientId = providers.gradleProperty("FLOSI_GOOGLE_WEB_CLIENT_ID").orElse("").get()
+val flosiFirebaseApiKey = providers.gradleProperty("FLOSI_FIREBASE_API_KEY")
+    .orElse("AIzaSyDxUooW3VAkHpzt7Kj_6SygQ9mHxYloY04")
+    .get()
+val flosiFirebaseAppId = providers.gradleProperty("FLOSI_FIREBASE_APP_ID")
+    .orElse("1:897529405735:android:0adef25c67db7d03e88902")
+    .get()
+val flosiFirebaseProjectId = providers.gradleProperty("FLOSI_FIREBASE_PROJECT_ID")
+    .orElse("flosi-7133e")
+    .get()
+val flosiGoogleWebClientId = providers.gradleProperty("FLOSI_GOOGLE_WEB_CLIENT_ID")
+    .orElse("897529405735-h0ijqqgoemls5hje4ucrfckcoq49fo27.apps.googleusercontent.com")
+    .get()
 
 android {
     namespace = "com.flosi.app"
