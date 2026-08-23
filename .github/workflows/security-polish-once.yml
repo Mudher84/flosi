@@ -1,0 +1,41 @@
+name: Flosi Security Polish Once
+on:
+  push:
+    paths:
+      - '.github/workflows/security-polish-once.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wire security polish script and refresh preview cache
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path('preview/flosi2.html')
+          text=html.read_text(encoding='utf-8')
+          script='<script src="flosi-security-polish.js?v=20260823-security-hint-2"></script>'
+          if script not in text:
+              if '</body>' not in text:
+                  raise SystemExit('missing </body>')
+              text=text.replace('</body>',script+'\n</body>')
+              html.write_text(text,encoding='utf-8')
+
+          index=Path('preview/index.html')
+          text=index.read_text(encoding='utf-8')
+          import re
+          text=re.sub(r'flosi2\.html\?v=[^\"\']+', 'flosi2.html?v=20260823-security-hint-2', text)
+          index.write_text(text,encoding='utf-8')
+          PY
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          rm .github/workflows/security-polish-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add preview/flosi2.html preview/index.html .github/workflows/security-polish-once.yml
+          git commit -m 'fix: restyle password requirement as compact readable note'
+          git push
