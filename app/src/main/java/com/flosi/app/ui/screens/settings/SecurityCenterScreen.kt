@@ -33,20 +33,43 @@ fun SecurityCenterScreen(
     val biometricStatus = AppSecurity.biometricStatus(context)
     val biometricAvailable = biometricStatus == BiometricManager.BIOMETRIC_SUCCESS
     val activeLayers = listOf(hasPin, biometric, secureScreen).count { it }
+    val protectionLabel = when {
+        activeLayers >= 3 -> "حماية قوية"
+        activeLayers == 2 -> "حماية جيدة"
+        activeLayers == 1 -> "حماية أساسية"
+        else -> "بدون قفل دخول"
+    }
 
-    FlosiPage("الأمان", "حماية حقيقية وفشل مغلق", onBack) {
+    FlosiPage("أمان Flosi", "خيارات واضحة لحماية بياناتك المالية", onBack) {
         CardBox {
-            Metric("مستوى الحماية", if (hasPin) "محمي" else "يحتاج PIN", if (hasPin) FlosiGreen else FlosiOrange)
-            Text(
-                if (hasPin) "PIN احتياطي فعّال • $activeLayers طبقات مهيأة" else "عيّن PIN أولاً حتى لا ينفتح التطبيق عند تعذر البصمة.",
-                color = FlosiMuted
-            )
+            Metric("مستوى الحماية", protectionLabel, if (activeLayers >= 2) FlosiGreen else FlosiOrange)
+            Text("فعّل فقط ما يناسبك. PIN والبصمة/الوجه خيارات مستقلة وليست إلزامية.", color = FlosiMuted)
         }
 
+        SectionTitle("فتح التطبيق")
         CardBox {
             SecuritySwitchRow(
-                title = "البصمة والوجه",
-                subtitle = if (biometricAvailable) "فتح سريع مع PIN احتياطي إلزامي" else "غير متاحة حالياً على الجهاز",
+                title = "PIN من 6 أرقام",
+                subtitle = if (hasPin) "مفعّل ويمكن تغييره متى تريد" else "اختياري — فعّله إذا تريد قفل رقمي سريع",
+                checked = hasPin,
+                onCheckedChange = { enabled ->
+                    if (enabled) showPinDialog = true
+                    else {
+                        AppSecurity.clearPin(context)
+                        hasPin = false
+                        message = "تم إيقاف PIN"
+                        onSecurityChanged()
+                    }
+                }
+            )
+            if (hasPin) {
+                HorizontalDivider(color = FlosiLine)
+                TextButton(onClick = { showPinDialog = true }) { Text("تغيير PIN") }
+            }
+            HorizontalDivider(color = FlosiLine)
+            SecuritySwitchRow(
+                title = "البصمة أو الوجه",
+                subtitle = if (biometricAvailable) "اختياري — يستخدم القياسات الحيوية المسجلة في الجهاز" else "غير متاحة حالياً على هذا الجهاز",
                 checked = biometric,
                 enabled = biometricAvailable || biometric,
                 onCheckedChange = { enabled ->
@@ -54,45 +77,18 @@ fun SecurityCenterScreen(
                     if (error != null) message = error
                     else {
                         biometric = enabled
-                        message = if (enabled) "تم تفعيل القياسات الحيوية" else "تم إيقاف القياسات الحيوية"
+                        message = if (enabled) "تم تفعيل البصمة أو الوجه" else "تم إيقاف البصمة أو الوجه"
                         onSecurityChanged()
                     }
                 }
             )
-            HorizontalDivider(color = FlosiLine)
-            ActionRow(
-                title = if (hasPin) "تغيير PIN" else "تعيين PIN",
-                subtitle = if (hasPin) "رمز احتياطي من 4 إلى 8 أرقام" else "مطلوب كمسار احتياطي آمن",
-                value = if (hasPin) "مفعّل" else "غير مفعّل",
-                accent = if (hasPin) FlosiGreen else FlosiOrange,
-                onClick = { showPinDialog = true }
-            )
-            if (hasPin && !biometric) {
-                TextButton(onClick = {
-                    AppSecurity.clearPin(context)
-                    hasPin = false
-                    message = "تم حذف PIN. لا توجد طبقة قفل دخول مفعّلة."
-                    onSecurityChanged()
-                }) { Text("إزالة PIN") }
-            }
         }
 
-        CardBox {
-            SecuritySwitchRow(
-                title = "حماية الشاشة والـ Recent Apps",
-                subtitle = "يمنع لقطات الشاشة وتسجيل المحتوى الحساس",
-                checked = secureScreen,
-                onCheckedChange = {
-                    AppSecurity.setScreenSecureEnabled(context, it)
-                    secureScreen = it
-                    onSecurityChanged()
-                }
-            )
-        }
-
+        SectionTitle("القفل والخصوصية")
         CardBox {
             Text("القفل التلقائي", color = FlosiText)
-            Text("يبدأ العد عند مغادرة Flosi. إذا انتهت المدة يرجع التطبيق لشاشة القفل.", color = FlosiMuted)
+            Text("يعمل فقط عند تفعيل PIN أو البصمة/الوجه.", color = FlosiMuted)
+            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
                 listOf(0 to "فوراً", 30 to "30ث", 60 to "1د", 300 to "5د").forEach { (seconds, label) ->
                     FilterChip(
@@ -100,6 +96,7 @@ fun SecurityCenterScreen(
                         onClick = {
                             AppSecurity.setAutoLockSeconds(context, seconds)
                             autoLock = seconds
+                            message = "تم حفظ مدة القفل التلقائي"
                             onSecurityChanged()
                         },
                         label = { Text(label) },
@@ -107,6 +104,29 @@ fun SecurityCenterScreen(
                     )
                 }
             }
+            HorizontalDivider(color = FlosiLine, modifier = Modifier.padding(vertical = 8.dp))
+            SecuritySwitchRow(
+                title = "حماية لقطة الشاشة",
+                subtitle = "يمنع تصوير الشاشة ويخفي المحتوى من التطبيقات الأخيرة",
+                checked = secureScreen,
+                onCheckedChange = {
+                    AppSecurity.setScreenSecureEnabled(context, it)
+                    secureScreen = it
+                    message = if (it) "تم تفعيل حماية الشاشة" else "تم إيقاف حماية الشاشة"
+                    onSecurityChanged()
+                }
+            )
+        }
+
+        SectionTitle("البيانات")
+        CardBox {
+            ActionRow(
+                title = "النسخ الاحتياطية المشفرة",
+                subtitle = "إدارة النسخ والاستعادة بأمان",
+                value = "إدارة",
+                accent = FlosiPurple,
+                onClick = onBackups
+            )
         }
 
         if (message != null) {
@@ -115,11 +135,7 @@ fun SecurityCenterScreen(
             }
         }
 
-        OutlinedButton(onClick = onBackups, modifier = Modifier.fillMaxWidth()) {
-            Text("إدارة النسخ الاحتياطية المشفرة")
-        }
-
-        if (hasPin) {
+        if (hasPin || biometric) {
             Button(
                 onClick = {
                     AppSecurity.lockNow()
@@ -139,7 +155,7 @@ fun SecurityCenterScreen(
                 if (error == null) {
                     hasPin = true
                     showPinDialog = false
-                    message = "تم حفظ PIN بأمان"
+                    message = "تم حفظ PIN المكوّن من 6 أرقام"
                     onSecurityChanged()
                 } else message = error
             }
@@ -161,7 +177,7 @@ fun FlosiLockScreen(onUnlocked: () -> Unit) {
     fun unlockWithBiometric() {
         val host = activity
         if (host == null) {
-            error = "تعذر تشغيل شاشة البصمة. استخدم PIN."
+            error = if (hasPin) "تعذر تشغيل البصمة. استخدم PIN." else "تعذر تشغيل البصمة أو الوجه."
             return
         }
         AppSecurity.authenticateBiometric(
@@ -197,9 +213,9 @@ fun FlosiLockScreen(onUnlocked: () -> Unit) {
             if (hasPin) {
                 OutlinedTextField(
                     value = pin,
-                    onValueChange = { pin = it.filter(Char::isDigit).take(8); error = null },
+                    onValueChange = { pin = it.filter(Char::isDigit).take(6); error = null },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("PIN") },
+                    label = { Text("PIN من 6 أرقام") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true
@@ -214,7 +230,7 @@ fun FlosiLockScreen(onUnlocked: () -> Unit) {
                             onUnlocked()
                         } else error = "PIN غير صحيح"
                     },
-                    enabled = pin.length >= 4,
+                    enabled = pin.length == 6,
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("فتح") }
             }
@@ -232,10 +248,7 @@ fun FlosiLockScreen(onUnlocked: () -> Unit) {
 
             if (!hasPin && biometricEnabled && !biometricAvailable) {
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "الحماية Fail-closed: لن يتم فتح Flosi لأن القياسات الحيوية المفعّلة غير متاحة ولا يوجد PIN احتياطي.",
-                    color = FlosiRed
-                )
+                Text("القياسات الحيوية المفعّلة غير متاحة حالياً على الجهاز.", color = FlosiRed)
             }
             error?.let {
                 Spacer(Modifier.height(12.dp))
@@ -266,17 +279,17 @@ private fun SecuritySwitchRow(
 private fun PinSetupDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
-    val valid = pin.matches(Regex("\\d{4,8}")) && pin == confirm
+    val valid = pin.matches(Regex("\\d{6}")) && pin == confirm
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("تعيين PIN") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("استخدم 4 إلى 8 أرقام. يُحفظ PIN كمشتق PBKDF2 مع salt محلي، وليس كنص صريح.", color = FlosiMuted)
+                Text("أدخل 6 أرقام فقط. PIN اختياري ويمكن إيقافه لاحقاً من صفحة الأمان.", color = FlosiMuted)
                 OutlinedTextField(
                     value = pin,
-                    onValueChange = { pin = it.filter(Char::isDigit).take(8) },
+                    onValueChange = { pin = it.filter(Char::isDigit).take(6) },
                     label = { Text("PIN الجديد") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
@@ -284,7 +297,7 @@ private fun PinSetupDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
                 )
                 OutlinedTextField(
                     value = confirm,
-                    onValueChange = { confirm = it.filter(Char::isDigit).take(8) },
+                    onValueChange = { confirm = it.filter(Char::isDigit).take(6) },
                     label = { Text("تأكيد PIN") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
