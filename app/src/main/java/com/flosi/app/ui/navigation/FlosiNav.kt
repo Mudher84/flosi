@@ -40,7 +40,7 @@ import com.flosi.app.ui.screens.categories.*
 import com.flosi.app.ui.screens.commitments.*
 import com.flosi.app.ui.screens.export.*
 import com.flosi.app.ui.screens.invoices.*
-import com.flosi.app.ui.screens.notifications.NotificationsScreen
+import com.flosi.app.ui.screens.notifications.FlosiNotificationCenterScreen
 import com.flosi.app.ui.screens.people.*
 import com.flosi.app.ui.screens.planning.*
 import com.flosi.app.ui.screens.settings.*
@@ -285,7 +285,7 @@ fun FlosiApp() {
                 )
             }
 
-            composable(R.NOTIFICATIONS) { NotificationsScreen(onBack = { nav.popBackStack() }) }
+            composable(R.NOTIFICATIONS) { FlosiNotificationCenterScreen(onBack = { nav.popBackStack() }) }
 
             composable(R.SECURITY) {
                 SecurityCenterScreen(
