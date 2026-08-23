@@ -5,6 +5,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+val flosiFirebaseApiKey = providers.gradleProperty("FLOSI_FIREBASE_API_KEY").orElse("").get()
+val flosiFirebaseAppId = providers.gradleProperty("FLOSI_FIREBASE_APP_ID").orElse("").get()
+val flosiFirebaseProjectId = providers.gradleProperty("FLOSI_FIREBASE_PROJECT_ID").orElse("").get()
+val flosiGoogleWebClientId = providers.gradleProperty("FLOSI_GOOGLE_WEB_CLIENT_ID").orElse("").get()
+
 android {
     namespace = "com.flosi.app"
     compileSdk = 36
@@ -17,6 +24,11 @@ android {
         versionName = "1.4.0-premium-rtl-home"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "FLOSI_FIREBASE_API_KEY", flosiFirebaseApiKey.asBuildConfigString())
+        buildConfigField("String", "FLOSI_FIREBASE_APP_ID", flosiFirebaseAppId.asBuildConfigString())
+        buildConfigField("String", "FLOSI_FIREBASE_PROJECT_ID", flosiFirebaseProjectId.asBuildConfigString())
+        buildConfigField("String", "FLOSI_GOOGLE_WEB_CLIENT_ID", flosiGoogleWebClientId.asBuildConfigString())
     }
 
     compileOptions {
@@ -26,6 +38,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -61,6 +74,13 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.fragment:fragment-ktx:1.8.8")
     implementation("androidx.core:core-ktx:1.16.0")
+
+    implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
