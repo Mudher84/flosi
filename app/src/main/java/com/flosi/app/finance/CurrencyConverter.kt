@@ -9,6 +9,7 @@ import java.math.RoundingMode
  */
 object CurrencyConverter {
     private const val SEP = "|"
+    private val CODE=Regex("[A-Z]{3}")
 
     data class Rate(
         val from: String,
@@ -17,13 +18,14 @@ object CurrencyConverter {
     )
 
     fun normalizeCode(code: String): String = code.trim().uppercase()
+    fun validCode(code:String):Boolean=normalizeCode(code).matches(CODE)
 
     fun encodeRate(from: String, to: String, rawRate: String): String? {
         val f = normalizeCode(from)
         val t = normalizeCode(to)
-        if (f.isBlank() || t.isBlank() || f == t) return null
+        if (!validCode(f) || !validCode(t) || f == t) return null
         val rate = rawRate.trim().replace(',', '.').toBigDecimalOrNull() ?: return null
-        if (rate <= BigDecimal.ZERO) return null
+        if (rate <= BigDecimal.ZERO || rate.precision()>30 || rate.scale()>18) return null
         return listOf(f, t, rate.stripTrailingZeros().toPlainString()).joinToString(SEP)
     }
 
@@ -33,15 +35,16 @@ object CurrencyConverter {
         val from = normalizeCode(parts[0])
         val to = normalizeCode(parts[1])
         val value = parts[2].toBigDecimalOrNull() ?: return null
-        if (from.isBlank() || to.isBlank() || from == to || value <= BigDecimal.ZERO) return null
+        if (!validCode(from) || !validCode(to) || from == to || value <= BigDecimal.ZERO || value.precision()>30 || value.scale()>18) return null
         return Rate(from, to, value)
     }
 
-    fun rates(entries: Set<String>): List<Rate> = entries.mapNotNull(::parseRate)
+    fun rates(entries: Set<String>): List<Rate> = entries.mapNotNull(::parseRate).sortedWith(compareBy<Rate>{it.from}.thenBy{it.to}.thenBy{it.value})
 
     fun convert(amount: Long, from: String, to: String, entries: Set<String>): Long? {
         val source = normalizeCode(from)
         val target = normalizeCode(to)
+        if(!validCode(source)||!validCode(target))return null
         if (source == target) return amount
 
         val available = rates(entries)
@@ -52,15 +55,14 @@ object CurrencyConverter {
     private fun findRate(from: String, to: String, rates: List<Rate>): BigDecimal? {
         rates.firstOrNull { it.from == from && it.to == to }?.let { return it.value }
         rates.firstOrNull { it.from == to && it.to == from }?.let {
-            return BigDecimal.ONE.divide(it.value, 18, RoundingMode.HALF_EVEN)
+            return runCatching{BigDecimal.ONE.divide(it.value, 18, RoundingMode.HALF_EVEN)}.getOrNull()
         }
         return null
     }
 
     private fun findTwoHopRate(from: String, to: String, rates: List<Rate>): BigDecimal? {
-        val currencies = rates.flatMap { listOf(it.from, it.to) }.toSet()
+        val currencies = rates.asSequence().flatMap { sequenceOf(it.from, it.to) }.filter{it!=from&&it!=to}.toSortedSet()
         currencies.forEach { via ->
-            if (via == from || via == to) return@forEach
             val first = findRate(from, via, rates) ?: return@forEach
             val second = findRate(via, to, rates) ?: return@forEach
             return first.multiply(second)
