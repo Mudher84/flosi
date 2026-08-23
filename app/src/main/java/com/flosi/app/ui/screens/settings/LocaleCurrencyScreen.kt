@@ -24,6 +24,7 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
  var message by remember{mutableStateOf("")}
  var languageMenu by remember{mutableStateOf(false)}
  val selectedLocale=FlosiLocales.get(state.language)
+ val doneText=flosiText("done")
 
  FlosiPage(flosiText("language_currency"),flosiText("all_languages_ready"),onBack){
   CardBox{
@@ -47,32 +48,16 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
 
   CardBox{
    Text(flosiText("base_currency"))
-   currencies.chunked(5).forEach{row->
-    Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
-     row.forEach{v->FilterChip(state.currency==v,{scope.launch{prefs.setCurrency(v)}},{Text(v)})}
-    }
-   }
+   currencies.chunked(5).forEach{row->Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach{v->FilterChip(state.currency==v,{scope.launch{prefs.setCurrency(v)}},{Text(v)})}}}
   }
 
   CardBox{
    Text(flosiText("exchange_rates"))
    Text("1 ${rateCurrency}",color=FlosiMuted)
-   Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
-    currencies.filter{it!=state.currency}.take(7).forEach{v->FilterChip(rateCurrency==v,{rateCurrency=v},{Text(v)})}
-   }
-   OutlinedTextField(
-    rateText,
-    {rateText=it.filter{ch->ch.isDigit()||ch=='.'||ch==','}},
-    Modifier.fillMaxWidth(),
-    label={Text("${rateCurrency} → ${state.currency}")},
-    singleLine=true
-   )
+   Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){currencies.filter{it!=state.currency}.take(7).forEach{v->FilterChip(rateCurrency==v,{rateCurrency=v},{Text(v)})}}
+   OutlinedTextField(rateText,{rateText=it.filter{ch->ch.isDigit()||ch=='.'||ch==','}},Modifier.fillMaxWidth(),label={Text("${rateCurrency} → ${state.currency}")},singleLine=true)
    Button(
-    onClick={scope.launch{
-     val ok=prefs.setExchangeRate(rateCurrency,state.currency,rateText)
-     message=if(ok) flosiText("done") else "Invalid rate"
-     if(ok)rateText=""
-    }},
+    onClick={scope.launch{val ok=prefs.setExchangeRate(rateCurrency,state.currency,rateText);message=if(ok)doneText else "Invalid rate";if(ok)rateText=""}},
     enabled=rateText.isNotBlank(),modifier=Modifier.fillMaxWidth()
    ){Text(flosiText("save_rate"))}
   }
