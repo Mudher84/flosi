@@ -23,14 +23,20 @@ class DailyFinanceWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
+        if (!FlosiWorkScheduler.isDailySummaryEnabled(applicationContext)) {
+            return Result.success()
+        }
+
         ensureChannel(applicationContext)
 
+        val notificationManager = NotificationManagerCompat.from(applicationContext)
         val notificationAllowed =
-            android.os.Build.VERSION.SDK_INT < 33 ||
-                ContextCompat.checkSelfPermission(
-                    applicationContext,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
+            notificationManager.areNotificationsEnabled() &&
+                (android.os.Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(
+                        applicationContext,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED)
 
         if (notificationAllowed) {
             val notification = NotificationCompat.Builder(
@@ -41,11 +47,10 @@ class DailyFinanceWorker(
                 .setContentTitle("ملخص فلوسي")
                 .setContentText("راجع مصروفات اليوم والالتزامات القادمة.")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
                 .build()
 
-            NotificationManagerCompat
-                .from(applicationContext)
-                .notify(1001, notification)
+            notificationManager.notify(NOTIFICATION_ID, notification)
         }
 
         return Result.success()
@@ -53,12 +58,11 @@ class DailyFinanceWorker(
 
     companion object {
         const val CHANNEL = "flosi_finance"
+        const val NOTIFICATION_ID = 1001
 
         fun ensureChannel(context: Context) {
             if (android.os.Build.VERSION.SDK_INT >= 26) {
-                val manager =
-                    context.getSystemService(NotificationManager::class.java)
-
+                val manager = context.getSystemService(NotificationManager::class.java)
                 manager.createNotificationChannel(
                     NotificationChannel(
                         CHANNEL,
@@ -72,8 +76,37 @@ class DailyFinanceWorker(
 }
 
 object FlosiWorkScheduler {
+    private const val WORK_NAME = "flosi_daily_summary"
+    private const val PREFS = "flosi_notification_settings"
+    private const val KEY_DAILY_SUMMARY = "daily_summary_enabled"
+
+    fun isDailySummaryEnabled(context: Context): Boolean =
+        context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_DAILY_SUMMARY, true)
+
+    fun setDailySummaryEnabled(context: Context, enabled: Boolean) {
+        val app = context.applicationContext
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DAILY_SUMMARY, enabled)
+            .apply()
+
+        if (enabled) {
+            ensureScheduled(app)
+        } else {
+            WorkManager.getInstance(app).cancelUniqueWork(WORK_NAME)
+            NotificationManagerCompat.from(app).cancel(DailyFinanceWorker.NOTIFICATION_ID)
+        }
+    }
 
     fun ensureScheduled(context: Context) {
+        val app = context.applicationContext
+        if (!isDailySummaryEnabled(app)) {
+            WorkManager.getInstance(app).cancelUniqueWork(WORK_NAME)
+            return
+        }
+
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .build()
@@ -87,9 +120,9 @@ object FlosiWorkScheduler {
                 .build()
 
         WorkManager
-            .getInstance(context)
+            .getInstance(app)
             .enqueueUniquePeriodicWork(
-                "flosi_daily_summary",
+                WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 daily
             )
