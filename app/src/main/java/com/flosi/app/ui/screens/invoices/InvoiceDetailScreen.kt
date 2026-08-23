@@ -27,8 +27,6 @@ fun InvoiceDetailScreen(id:Long,onBack:()->Unit,onPdf:(Long)->Unit){
     FlosiPage(inv?.let{"فاتورة #${it.number}"} ?: "الفاتورة","تفاصيل الفاتورة",onBack){
         inv?.let{i->
             val currency=i.currency.trim().uppercase().ifBlank{"IQD"}
-            val taxable=(i.subtotal-i.discount).coerceAtLeast(0L)
-            val tax=(i.total-taxable).coerceAtLeast(0L)
             val remaining=(i.total-i.paidAmount).coerceAtLeast(0L)
             val tone=when(i.status){"paid"->FlosiGreen;"partial"->FlosiOrange;else->FlosiPurple}
 
@@ -38,7 +36,7 @@ fun InvoiceDetailScreen(id:Long,onBack:()->Unit,onPdf:(Long)->Unit){
                 ActionRow("الحالة",invoiceStatusLabel(i.status),accent=tone)
                 ActionRow("المجموع الفرعي","",moneyText(i.subtotal,currency),FlosiText)
                 if(i.discount>0L)ActionRow("الخصم","",moneyText(i.discount,currency),FlosiRed)
-                if(tax>0L)ActionRow("الضريبة","",moneyText(tax,currency),FlosiOrange)
+                if(i.taxAmount>0L)ActionRow("الضريبة","${quantityText(i.taxPercent)}%",moneyText(i.taxAmount,currency),FlosiOrange)
                 ActionRow("المدفوع","",moneyText(i.paidAmount,currency),FlosiGreen)
                 ActionRow("المتبقي","",moneyText(remaining,currency),if(remaining>0L)FlosiOrange else FlosiGreen)
             }
