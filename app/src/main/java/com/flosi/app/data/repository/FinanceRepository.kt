@@ -61,7 +61,7 @@ class FinanceRepository(private val db: FlosiDatabase) {
                     CategoryEntity(name="ديون",kind="both",colorArgb=0xFFFF6B72,system=true,sortOrder=6)
                 )
             )
-            val ahmad = db.personDao().insert(PersonEntity(name="أحمد محمد",phone="07701234567",openingBalance=125_000,currentBalance=125_000))
+            db.personDao().insert(PersonEntity(name="أحمد محمد",phone="07701234567",openingBalance=125_000,currentBalance=125_000))
             addTransactionInternal(TransactionEntity(kind="expense",amount=25_000,title="وقود السيارة",accountId=cash,personId=null))
         }
     }
@@ -113,9 +113,42 @@ class FinanceRepository(private val db: FlosiDatabase) {
     suspend fun transfer(fromAccountId: Long, toAccountId: Long, amount: Long, fee: Long = 0L, note: String = "") = db.withTransaction {
         require(fromAccountId != toAccountId) { "يجب اختيار حسابين مختلفين" }
         require(amount > 0) { "المبلغ يجب أن يكون أكبر من صفر" }
+        require(fee >= 0) { "رسوم التحويل لا يمكن أن تكون سالبة" }
         val now = System.currentTimeMillis()
-        val outId = db.transactionDao().insert(TransactionEntity(kind="transfer_out",amount=amount+fee,title="تحويل صادر",note=note,accountId=fromAccountId,occurredAt=now))
-        val inId = db.transactionDao().insert(TransactionEntity(kind="transfer_in",amount=amount,title="تحويل وارد",note=note,accountId=toAccountId,linkedTransactionId=outId,occurredAt=now))
+        val outId = db.transactionDao().insert(
+            TransactionEntity(
+                kind="transfer_out",
+                amount=amount,
+                title="تحويل صادر",
+                note=note,
+                accountId=fromAccountId,
+                occurredAt=now
+            )
+        )
+        val inId = db.transactionDao().insert(
+            TransactionEntity(
+                kind="transfer_in",
+                amount=amount,
+                title="تحويل وارد",
+                note=note,
+                accountId=toAccountId,
+                linkedTransactionId=outId,
+                occurredAt=now
+            )
+        )
+        if (fee > 0L) {
+            db.transactionDao().insert(
+                TransactionEntity(
+                    kind="expense",
+                    amount=fee,
+                    title="رسوم تحويل",
+                    note=note,
+                    accountId=fromAccountId,
+                    linkedTransactionId=outId,
+                    occurredAt=now
+                )
+            )
+        }
         db.accountDao().adjustBalance(fromAccountId, -(amount+fee))
         db.accountDao().adjustBalance(toAccountId, amount)
         outId to inId
