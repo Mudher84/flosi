@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,16 +22,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,184 +59,160 @@ import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-private val FlosiPurple = Color(0xFF7B44EF)
-private val FlosiPurpleSoft = Color(0xFFF5F0FF)
-private val FlosiText = Color(0xFF17131F)
-private val FlosiMuted = Color(0xFF8F8798)
-private val FlosiGreen = Color(0xFF18B97D)
-private val FlosiRed = Color(0xFFE84C61)
+private val Purple = Color(0xFF7B44EF)
+private val PurpleSoft = Color(0xFFF5F0FF)
+private val TextMain = Color(0xFF17131F)
+private val Muted = Color(0xFF8F8798)
+private val Green = Color(0xFF18B97D)
+private val Red = Color(0xFFE84C61)
 
-private object FlosiCloudAuth {
-    fun configured(): Boolean =
+private object CloudAuth {
+    fun configured() =
         BuildConfig.FLOSI_FIREBASE_API_KEY.isNotBlank() &&
             BuildConfig.FLOSI_FIREBASE_APP_ID.isNotBlank() &&
             BuildConfig.FLOSI_FIREBASE_PROJECT_ID.isNotBlank() &&
             BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID.isNotBlank()
 
     fun auth(context: Context): FirebaseAuth {
-        val app = FirebaseApp.getApps(context).firstOrNull() ?: run {
-            check(configured()) { "Flosi cloud authentication is not configured" }
+        val app = FirebaseApp.getApps(context).firstOrNull { it.name == "flosi-auth" } ?: run {
+            check(configured()) { "إعداد Google/Firebase غير مكتمل" }
             val options = FirebaseOptions.Builder()
                 .setApiKey(BuildConfig.FLOSI_FIREBASE_API_KEY)
                 .setApplicationId(BuildConfig.FLOSI_FIREBASE_APP_ID)
                 .setProjectId(BuildConfig.FLOSI_FIREBASE_PROJECT_ID)
                 .build()
             FirebaseApp.initializeApp(context, options, "flosi-auth")
-                ?: error("Unable to initialize Flosi Firebase authentication")
+                ?: error("تعذر تهيئة مصادقة Flosi")
         }
         return FirebaseAuth.getInstance(app)
     }
 
-    fun hasPassword(user: FirebaseUser?): Boolean =
+    fun hasPassword(user: FirebaseUser?) =
         user?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
 
-    suspend fun signInWithGoogle(context: Context): FirebaseUser {
-        check(configured()) { "إعداد Google/Firebase غير مكتمل" }
-        val credentialManager = CredentialManager.create(context)
-        val googleOption = GetGoogleIdOption.Builder()
+    suspend fun google(context: Context): FirebaseUser {
+        val option = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID)
             .setAutoSelectEnabled(false)
             .build()
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(googleOption)
-            .build()
-        val result = credentialManager.getCredential(context, request)
-        val credential = result.credential
+        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+        val credential = CredentialManager.create(context).getCredential(context, request).credential
         require(
             credential is CustomCredential &&
                 credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
         ) { "لم يرجع Google بيانات دخول صالحة" }
-        val google = GoogleIdTokenCredential.createFrom(credential.data)
-        val firebaseCredential = GoogleAuthProvider.getCredential(google.idToken, null)
-        return auth(context).signInWithCredential(firebaseCredential).await().user
-            ?: error("تعذر إنشاء جلسة Flosi")
+        val token = GoogleIdTokenCredential.createFrom(credential.data).idToken
+        val result = auth(context).signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
+        return result.user ?: error("تعذر إنشاء جلسة Flosi")
     }
 
-    suspend fun linkStrongPassword(context: Context, password: String): FirebaseUser {
-        val current = auth(context).currentUser ?: error("سجّل الدخول عبر Google أولاً")
-        val email = current.email ?: error("حساب Google لا يحتوي بريداً قابلاً للاستخدام")
-        val credential = EmailAuthProvider.getCredential(email, password)
-        return if (hasPassword(current)) {
-            current.updatePassword(password).await()
-            current.reload().await()
-            auth(context).currentUser ?: current
-        } else {
-            current.linkWithCredential(credential).await().user ?: current
+    suspend fun linkPassword(context: Context, password: String): FirebaseUser {
+        val auth = auth(context)
+        val user = auth.currentUser ?: error("سجّل الدخول عبر Google أولاً")
+        val email = user.email ?: error("حساب Google لا يحتوي بريداً صالحاً")
+        if (hasPassword(user)) {
+            user.updatePassword(password).await()
+            user.reload().await()
+            return auth.currentUser ?: user
         }
+        return user.linkWithCredential(EmailAuthProvider.getCredential(email, password)).await().user ?: user
     }
 
-    suspend fun signInWithPassword(context: Context, email: String, password: String): FirebaseUser {
-        return auth(context).signInWithEmailAndPassword(email.trim(), password).await().user
+    suspend fun passwordLogin(context: Context, email: String, password: String): FirebaseUser =
+        auth(context).signInWithEmailAndPassword(email.trim(), password).await().user
             ?: error("تعذر تسجيل الدخول")
-    }
 
-    suspend fun sendReset(context: Context, email: String) {
+    suspend fun reset(context: Context, email: String) {
         auth(context).sendPasswordResetEmail(email.trim()).await()
     }
 }
 
-private data class PasswordStrength(
-    val length: Boolean,
+private data class Strength(
+    val len: Boolean,
     val lower: Boolean,
     val upper: Boolean,
     val digit: Boolean,
     val symbol: Boolean
 ) {
-    val strong: Boolean get() = length && lower && upper && digit && symbol
+    val strong get() = len && lower && upper && digit && symbol
 }
 
-private fun passwordStrength(value: String) = PasswordStrength(
-    length = value.length >= 12,
-    lower = value.any { it.isLowerCase() },
-    upper = value.any { it.isUpperCase() },
-    digit = value.any { it.isDigit() },
+private fun strength(value: String) = Strength(
+    len = value.length >= 12,
+    lower = value.any(Char::isLowerCase),
+    upper = value.any(Char::isUpperCase),
+    digit = value.any(Char::isDigit),
     symbol = value.any { !it.isLetterOrDigit() && !it.isWhitespace() }
 )
 
-private enum class AuthStage { LOGIN, SET_PASSWORD, RESET }
+private enum class Stage { LOGIN, SET_PASSWORD, RESET }
 
 @Composable
 fun FlosiAuthGate(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    var authUser by remember { mutableStateOf<FirebaseUser?>(null) }
-    var stage by remember { mutableStateOf(AuthStage.LOGIN) }
-
-    if (!FlosiCloudAuth.configured()) {
-        AuthConfigurationRequired()
+    if (!CloudAuth.configured()) {
+        MissingConfig()
         return
     }
 
-    val auth = remember { FlosiCloudAuth.auth(context) }
+    val auth = remember { CloudAuth.auth(context) }
+    var user by remember { mutableStateOf(auth.currentUser) }
+    var stage by remember {
+        mutableStateOf(if (user != null && !CloudAuth.hasPassword(user)) Stage.SET_PASSWORD else Stage.LOGIN)
+    }
+
     DisposableEffect(auth) {
-        val listener = FirebaseAuth.AuthStateListener { firebase ->
-            authUser = firebase.currentUser
-            stage = when {
-                firebase.currentUser == null -> AuthStage.LOGIN
-                FlosiCloudAuth.hasPassword(firebase.currentUser) -> AuthStage.LOGIN
-                else -> AuthStage.SET_PASSWORD
-            }
+        val listener = FirebaseAuth.AuthStateListener {
+            user = it.currentUser
+            if (user == null) stage = Stage.LOGIN
+            else if (!CloudAuth.hasPassword(user)) stage = Stage.SET_PASSWORD
         }
         auth.addAuthStateListener(listener)
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
-    val user = authUser ?: auth.currentUser
-    if (user != null && FlosiCloudAuth.hasPassword(user)) {
+    if (user != null && CloudAuth.hasPassword(user)) {
         content()
         return
     }
 
     when (stage) {
-        AuthStage.LOGIN -> LoginScreen(
-            onGoogleSucceeded = { googleUser ->
-                authUser = googleUser
-                stage = if (FlosiCloudAuth.hasPassword(googleUser)) AuthStage.LOGIN else AuthStage.SET_PASSWORD
+        Stage.LOGIN -> Login(
+            onGoogle = {
+                user = it
+                stage = if (CloudAuth.hasPassword(it)) Stage.LOGIN else Stage.SET_PASSWORD
             },
-            onPasswordSucceeded = { signed -> authUser = signed },
-            onForgot = { stage = AuthStage.RESET }
+            onPassword = { user = it },
+            onReset = { stage = Stage.RESET }
         )
-        AuthStage.SET_PASSWORD -> SetStrongPasswordScreen(
+        Stage.SET_PASSWORD -> SetPassword(
             email = user?.email.orEmpty(),
-            onDone = { linked -> authUser = linked },
+            onDone = { user = it },
             onCancel = {
                 auth.signOut()
-                authUser = null
-                stage = AuthStage.LOGIN
+                user = null
+                stage = Stage.LOGIN
             }
         )
-        AuthStage.RESET -> ResetPasswordScreen(
-            initialEmail = user?.email.orEmpty(),
-            onBack = { stage = AuthStage.LOGIN }
-        )
+        Stage.RESET -> ResetPassword(user?.email.orEmpty()) { stage = Stage.LOGIN }
     }
 }
 
 @Composable
-private fun AuthConfigurationRequired() {
-    Surface(Modifier.fillMaxSize(), color = Color(0xFFF7F6FB)) {
-        Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Flosi", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Text("تسجيل Google جاهز برمجياً لكنه يحتاج بيانات مشروع Firebase وGoogle OAuth الخاصة بـ Flosi.", color = FlosiMuted)
-                    Spacer(Modifier.height(14.dp))
-                    Text("لا يتم فتح التطبيق بوضع غير محمي عند غياب إعدادات المصادقة.", color = FlosiRed)
-                }
-            }
-        }
-    }
+private fun MissingConfig() = AuthPage {
+    Text("Flosi", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(8.dp))
+    Text("نظام تسجيل Google جاهز، لكنه يحتاج بيانات Firebase وGoogle OAuth الخاصة بالتطبيق.", color = Muted)
+    Spacer(Modifier.height(12.dp))
+    Text("Flosi لا يفتح الحساب بدون مصادقة صحيحة.", color = Red)
 }
 
 @Composable
-private fun LoginScreen(
-    onGoogleSucceeded: (FirebaseUser) -> Unit,
-    onPasswordSucceeded: (FirebaseUser) -> Unit,
-    onForgot: () -> Unit
+private fun Login(
+    onGoogle: (FirebaseUser) -> Unit,
+    onPassword: (FirebaseUser) -> Unit,
+    onReset: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -246,31 +222,27 @@ private fun LoginScreen(
     var error by remember { mutableStateOf<String?>(null) }
 
     AuthPage {
-        Text("Flosi", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = FlosiText)
-        Text("أموالك، بحساب واحد موثّق", color = FlosiMuted)
+        Text("Flosi", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = TextMain)
+        Text("أموالك، بحساب موثّق", color = Muted)
         Spacer(Modifier.height(22.dp))
-
         Button(
             onClick = {
                 scope.launch {
                     busy = true; error = null
-                    try {
-                        onGoogleSucceeded(FlosiCloudAuth.signInWithGoogle(context))
-                    } catch (_: GetCredentialException) {
-                        error = "تم إلغاء تسجيل Google أو تعذر إكماله."
-                    } catch (t: Throwable) {
-                        error = t.message ?: "تعذر تسجيل الدخول عبر Google"
-                    } finally { busy = false }
+                    try { onGoogle(CloudAuth.google(context)) }
+                    catch (_: GetCredentialException) { error = "تم إلغاء Google أو تعذر إكماله." }
+                    catch (t: Throwable) { error = t.message ?: "تعذر تسجيل الدخول عبر Google" }
+                    finally { busy = false }
                 }
             },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = FlosiText),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = TextMain),
             shape = RoundedCornerShape(16.dp)
         ) { Text("G   المتابعة باستخدام Google", fontWeight = FontWeight.Bold) }
 
         Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Divider(Modifier.weight(1f)); Text("  أو  ", color = FlosiMuted); Divider(Modifier.weight(1f))
+            HorizontalDivider(Modifier.weight(1f)); Text("  أو  ", color = Muted); HorizontalDivider(Modifier.weight(1f))
         }
 
         OutlinedTextField(
@@ -291,51 +263,46 @@ private fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp)
         )
-        TextButton(onClick = onForgot, modifier = Modifier.align(Alignment.Start)) {
-            Text("نسيت كلمة المرور؟", color = FlosiPurple)
+        TextButton(onClick = onReset, modifier = Modifier.align(Alignment.Start)) {
+            Text("نسيت كلمة المرور؟", color = Purple)
         }
         Button(
             onClick = {
                 scope.launch {
                     busy = true; error = null
-                    try { onPasswordSucceeded(FlosiCloudAuth.signInWithPassword(context, email, password)) }
+                    try { onPassword(CloudAuth.passwordLogin(context, email, password)) }
                     catch (_: Throwable) { error = "البريد أو كلمة المرور غير صحيحة." }
                     finally { busy = false }
                 }
             },
             enabled = !busy && email.isNotBlank() && password.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = FlosiPurple),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple),
             shape = RoundedCornerShape(16.dp)
         ) { if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White) else Text("تسجيل الدخول") }
-
-        error?.let { Text(it, color = FlosiRed, modifier = Modifier.padding(top = 12.dp)) }
+        error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 12.dp)) }
         Spacer(Modifier.height(14.dp))
-        Text("إنشاء حساب جديد يبدأ دائماً بالموافقة من Google، وبعدها يطلب Flosi كلمة مرور قوية مرتبطة بنفس البريد.", color = FlosiMuted)
+        Text("الحساب الجديد يبدأ بالموافقة من Google، ثم يطلب Flosi كلمة مرور قوية لنفس البريد.", color = Muted)
     }
 }
 
 @Composable
-private fun SetStrongPasswordScreen(
-    email: String,
-    onDone: (FirebaseUser) -> Unit,
-    onCancel: () -> Unit
-) {
+private fun SetPassword(email: String, onDone: (FirebaseUser) -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var password by remember { mutableStateOf("") }
+    var pass by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val strength = passwordStrength(password)
+    val s = strength(pass)
 
     AuthPage {
         Text("أكمل حماية حسابك", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("وافق Google على الحساب: $email", color = FlosiMuted)
+        Text("وافق Google على: $email", color = Muted)
         Spacer(Modifier.height(18.dp))
         OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
+            value = pass,
+            onValueChange = { pass = it },
             label = { Text("كلمة مرور قوية") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
@@ -353,32 +320,31 @@ private fun SetStrongPasswordScreen(
             shape = RoundedCornerShape(16.dp)
         )
         Spacer(Modifier.height(14.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = FlosiPurpleSoft), shape = RoundedCornerShape(18.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = PurpleSoft), shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Requirement("12 حرفاً على الأقل", strength.length)
-                Requirement("حرف إنكليزي صغير", strength.lower)
-                Requirement("حرف إنكليزي كبير", strength.upper)
-                Requirement("رقم واحد على الأقل", strength.digit)
-                Requirement("رمز خاص مثل ! @ # $", strength.symbol)
+                Rule("12 حرفاً على الأقل", s.len)
+                Rule("حرف صغير", s.lower)
+                Rule("حرف كبير", s.upper)
+                Rule("رقم واحد على الأقل", s.digit)
+                Rule("رمز خاص مثل ! @ # $", s.symbol)
             }
         }
-        error?.let { Text(it, color = FlosiRed, modifier = Modifier.padding(top = 10.dp)) }
+        error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 10.dp)) }
         Spacer(Modifier.height(16.dp))
         Button(
             onClick = {
                 scope.launch {
                     busy = true; error = null
                     try {
-                        if (password != confirm) error("كلمتا المرور غير متطابقتين")
-                        onDone(FlosiCloudAuth.linkStrongPassword(context, password))
-                    } catch (t: Throwable) {
-                        error = t.message ?: "تعذر حفظ كلمة المرور"
-                    } finally { busy = false }
+                        require(pass == confirm) { "كلمتا المرور غير متطابقتين" }
+                        onDone(CloudAuth.linkPassword(context, pass))
+                    } catch (t: Throwable) { error = t.message ?: "تعذر حفظ كلمة المرور" }
+                    finally { busy = false }
                 }
             },
-            enabled = !busy && strength.strong && password == confirm,
+            enabled = !busy && s.strong && pass == confirm,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = FlosiPurple),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple),
             shape = RoundedCornerShape(16.dp)
         ) { if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White) else Text("حفظ والدخول إلى Flosi") }
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("إلغاء والعودة") }
@@ -386,19 +352,15 @@ private fun SetStrongPasswordScreen(
 }
 
 @Composable
-private fun Requirement(label: String, ok: Boolean) {
+private fun Rule(label: String, ok: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        androidx.compose.material3.Icon(
-            imageVector = if (ok) Icons.Default.CheckCircle else Icons.Default.Lock,
-            contentDescription = null,
-            tint = if (ok) FlosiGreen else FlosiMuted
-        )
-        Text("  $label", color = if (ok) FlosiGreen else FlosiMuted)
+        Icon(if (ok) Icons.Default.CheckCircle else Icons.Default.Lock, null, tint = if (ok) Green else Muted)
+        Text("  $label", color = if (ok) Green else Muted)
     }
 }
 
 @Composable
-private fun ResetPasswordScreen(initialEmail: String, onBack: () -> Unit) {
+private fun ResetPassword(initialEmail: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var email by remember(initialEmail) { mutableStateOf(initialEmail) }
@@ -408,7 +370,7 @@ private fun ResetPasswordScreen(initialEmail: String, onBack: () -> Unit) {
 
     AuthPage {
         Text("استعادة كلمة المرور", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("أدخل نفس البريد الذي وافقت عليه في Google. سيرسل Firebase رابط إعادة تعيين إلى ذلك البريد.", color = FlosiMuted)
+        Text("استخدم نفس بريد Google المرتبط بحساب Flosi. سيصلك رابط إعادة التعيين على البريد نفسه.", color = Muted)
         Spacer(Modifier.height(18.dp))
         OutlinedTextField(
             value = email,
@@ -423,27 +385,24 @@ private fun ResetPasswordScreen(initialEmail: String, onBack: () -> Unit) {
             onClick = {
                 scope.launch {
                     busy = true; error = null
-                    try {
-                        FlosiCloudAuth.sendReset(context, email)
-                        sent = true
-                    } catch (_: Throwable) {
-                        error = "تعذر إرسال رسالة الاستعادة. تحقق من البريد والاتصال."
-                    } finally { busy = false }
+                    try { CloudAuth.reset(context, email); sent = true }
+                    catch (_: Throwable) { error = "تعذر إرسال رسالة الاستعادة. تحقق من البريد والاتصال." }
+                    finally { busy = false }
                 }
             },
             enabled = !busy && email.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = FlosiPurple),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple),
             shape = RoundedCornerShape(16.dp)
         ) { if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White) else Text("إرسال رابط الاستعادة") }
-        if (sent) Text("تم طلب رسالة الاستعادة. افحص بريدك ثم ارجع وسجّل الدخول بكلمة المرور الجديدة.", color = FlosiGreen, modifier = Modifier.padding(top = 12.dp))
-        error?.let { Text(it, color = FlosiRed, modifier = Modifier.padding(top = 12.dp)) }
+        if (sent) Text("تم طلب رسالة الاستعادة. افحص بريدك ثم سجّل الدخول بكلمة المرور الجديدة.", color = Green, modifier = Modifier.padding(top = 12.dp))
+        error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 12.dp)) }
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("العودة لتسجيل الدخول") }
     }
 }
 
 @Composable
-private fun AuthPage(content: @Composable Column.() -> Unit) {
+private fun AuthPage(content: @Composable ColumnScope.() -> Unit) {
     Surface(Modifier.fillMaxSize(), color = Color(0xFFF7F6FB)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Card(
