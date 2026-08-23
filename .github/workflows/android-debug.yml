@@ -26,11 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$FLOSI_KEYSTORE_BASE64"
-          RAW="$FLOSI_KEYSTORE_BASE64"
-          CLEANED="$(printf '%s\n' "$RAW" | sed -n 's/^FLOSI_KEYSTORE_BASE64=//p' | head -n 1 | tr -d '\r\n\t ')"
-          if [ -z "$CLEANED" ]; then
-            CLEANED="$(printf '%s\n' "$RAW" | head -n 1 | tr -d '\r\n\t ')"
-          fi
+          CLEANED="$(printf '%s' "$FLOSI_KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=')"
           test -n "$CLEANED"
           printf '%s' "$CLEANED" | base64 --decode > "$RUNNER_TEMP/flosi-release.keystore"
           test -s "$RUNNER_TEMP/flosi-release.keystore"
