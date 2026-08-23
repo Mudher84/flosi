@@ -18,6 +18,7 @@ data class HomeUiState(
     val topCategories: List<CategorySpend> = emptyList(),
     val reservedCommitments: Long = 0,
     val reservedGoals: Long = 0,
+    val reserveUnconvertedCurrencies: List<String> = emptyList(),
     val loading: Boolean = true
 )
 
@@ -33,11 +34,53 @@ data class BudgetProgress(
     val warningReached: Boolean get() = usagePercent >= budget.warningPercent
 }
 
+private data class ReserveSnapshot(
+    val commitments: Long,
+    val goals: Long,
+    val missingCurrencies: List<String>
+)
+
 class HomeViewModel(private val repo: FinanceRepository): ViewModel() {
-    val state: StateFlow<HomeUiState> = combine(repo.dashboard,repo.transactions,repo.topExpenseCategories,repo.commitments,repo.goals) { dash, tx, cats, commitments, goals ->
-        val commitmentReserve = commitments.sumOf { it.amount.coerceAtLeast(0L) }
-        val goalReserve = goals.sumOf { goal -> val target = goal.targetAmount.coerceAtLeast(0L); goal.savedAmount.coerceAtLeast(0L).coerceAtMost(target) }
-        HomeUiState(dashboard=dash,recent=tx.take(5),topCategories=cats,reservedCommitments=commitmentReserve,reservedGoals=goalReserve,loading=false)
+    private val reserves: Flow<ReserveSnapshot> = combine(repo.commitments,repo.goals,repo.accounts,repo.preferenceState) { commitments,goals,accounts,prefs ->
+        val base=CurrencyConverter.normalizeCode(prefs.currency)
+        val accountMap=accounts.associateBy{it.id}
+        val missing=linkedSetOf<String>()
+
+        fun convert(amount:Long,currency:String):Long{
+            val source=CurrencyConverter.normalizeCode(currency)
+            val converted=CurrencyConverter.convert(amount,source,base,prefs.exchangeRates)
+            if(converted==null) missing+=source
+            return converted?:0L
+        }
+
+        val commitmentReserve=commitments.sumOf{item->
+            val currency=item.accountId?.let(accountMap::get)?.currency?:base
+            convert(item.amount.coerceAtLeast(0L),currency)
+        }
+        val goalReserve=goals.sumOf{goal->
+            val target=goal.targetAmount.coerceAtLeast(0L)
+            val saved=goal.savedAmount.coerceAtLeast(0L).coerceAtMost(target)
+            val currency=goal.accountId?.let(accountMap::get)?.currency?:base
+            convert(saved,currency)
+        }
+
+        ReserveSnapshot(
+            commitments=commitmentReserve,
+            goals=goalReserve,
+            missingCurrencies=missing.filter{it!=base}.sorted()
+        )
+    }
+
+    val state: StateFlow<HomeUiState> = combine(repo.dashboard,repo.transactions,repo.topExpenseCategories,reserves) { dash,tx,cats,reserve ->
+        HomeUiState(
+            dashboard=dash,
+            recent=tx.take(5),
+            topCategories=cats,
+            reservedCommitments=reserve.commitments,
+            reservedGoals=reserve.goals,
+            reserveUnconvertedCurrencies=reserve.missingCurrencies,
+            loading=false
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 }
 
