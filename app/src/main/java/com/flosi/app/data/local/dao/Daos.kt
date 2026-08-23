@@ -58,6 +58,7 @@ data class TransactionWithNames(
     val accountName: String,
     val accountCurrency: String,
     val personName: String?,
+    val categoryId: Long?,
     val categoryName: String?
 )
 
@@ -67,7 +68,8 @@ data class CategorySpendRow(val categoryId: Long?, val categoryName: String?, va
 interface TransactionDao {
     @Query("""
         SELECT t.id,t.kind,t.amount,t.title,t.note,t.occurredAt,
-               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,c.name AS categoryName
+               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,
+               t.categoryId AS categoryId,c.name AS categoryName
         FROM transactions t
         JOIN accounts a ON a.id=t.accountId
         LEFT JOIN people p ON p.id=t.personId
@@ -79,7 +81,8 @@ interface TransactionDao {
 
     @Query("""
         SELECT t.id,t.kind,t.amount,t.title,t.note,t.occurredAt,
-               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,c.name AS categoryName
+               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,
+               t.categoryId AS categoryId,c.name AS categoryName
         FROM transactions t
         JOIN accounts a ON a.id=t.accountId
         LEFT JOIN people p ON p.id=t.personId
@@ -93,7 +96,8 @@ interface TransactionDao {
 
     @Query("""
         SELECT t.id,t.kind,t.amount,t.title,t.note,t.occurredAt,
-               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,c.name AS categoryName
+               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,
+               t.categoryId AS categoryId,c.name AS categoryName
         FROM transactions t
         JOIN accounts a ON a.id=t.accountId
         LEFT JOIN people p ON p.id=t.personId
@@ -124,7 +128,8 @@ interface TransactionDao {
 
     @Query("""
         SELECT t.id,t.kind,t.amount,t.title,t.note,t.occurredAt,
-               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,c.name AS categoryName
+               a.name AS accountName,a.currency AS accountCurrency,p.name AS personName,
+               t.categoryId AS categoryId,c.name AS categoryName
         FROM transactions t
         JOIN accounts a ON a.id=t.accountId
         LEFT JOIN people p ON p.id=t.personId
@@ -154,6 +159,9 @@ interface TransactionDao {
 @Dao interface GoalDao {
     @Query("SELECT * FROM goals WHERE active=1 ORDER BY targetDate") fun observeActive(): Flow<List<GoalEntity>>
     @Query("SELECT * FROM goals WHERE id=:id LIMIT 1") fun observe(id:Long): Flow<GoalEntity?>
+    @Query("SELECT * FROM goals WHERE id=:id LIMIT 1") suspend fun get(id:Long): GoalEntity?
+    @Query("SELECT COALESCE(SUM(savedAmount),0) FROM goals WHERE active=1 AND accountId=:accountId") suspend fun reservedForAccount(accountId:Long): Long
+    @Query("UPDATE goals SET savedAmount = MIN(targetAmount, MAX(0, savedAmount + :delta)) WHERE id=:id") suspend fun adjustSaved(id:Long,delta:Long)
     @Insert suspend fun insert(entity: GoalEntity): Long
     @Update suspend fun update(entity: GoalEntity)
 }
