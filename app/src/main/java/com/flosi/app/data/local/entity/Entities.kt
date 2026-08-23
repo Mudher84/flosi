@@ -51,7 +51,7 @@ data class CategoryEntity(
         ForeignKey(entity = PersonEntity::class, parentColumns = ["id"], childColumns = ["personId"], onDelete = ForeignKey.SET_NULL),
         ForeignKey(entity = CategoryEntity::class, parentColumns = ["id"], childColumns = ["categoryId"], onDelete = ForeignKey.SET_NULL)
     ],
-    indices = [Index("accountId"), Index("personId"), Index("categoryId"), Index("occurredAt"), Index("kind")]
+    indices = [Index("accountId"), Index("personId"), Index("categoryId"), Index("goalId"), Index("occurredAt"), Index("kind")]
 )
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -62,6 +62,7 @@ data class TransactionEntity(
     val accountId: Long,
     val personId: Long? = null,
     val categoryId: Long? = null,
+    val goalId: Long? = null,
     val linkedTransactionId: Long? = null,
     val attachmentUri: String? = null,
     val occurredAt: Long = System.currentTimeMillis(),
@@ -91,6 +92,7 @@ data class BudgetEntity(
     val title: String,
     val categoryId: Long? = null,
     val limitAmount: Long,
+    val currency: String = "IQD",
     val periodStart: Long,
     val periodEnd: Long,
     val warningPercent: Int = 80,
