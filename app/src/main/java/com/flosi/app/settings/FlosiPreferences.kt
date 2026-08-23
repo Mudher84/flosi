@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.flosi.app.finance.CurrencyConverter
+import com.flosi.app.i18n.FlosiLocales
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -31,9 +32,10 @@ class FlosiPreferences(private val context: Context) {
     }
 
     val state: Flow<FlosiPreferencesState> = context.flosiDataStore.data.map { p ->
+        val storedLanguage = p[Keys.language]
         FlosiPreferencesState(
             currency=p[Keys.currency] ?: "IQD",
-            language=p[Keys.language] ?: "ar",
+            language=if (FlosiLocales.isSupported(storedLanguage)) storedLanguage!! else "ar",
             biometricLock=p[Keys.biometric] ?: false,
             hideRecents=p[Keys.hideRecents] ?: false,
             dailySummaryEnabled=p[Keys.dailySummary] ?: true,
@@ -43,7 +45,10 @@ class FlosiPreferences(private val context: Context) {
     }
 
     suspend fun setCurrency(v:String)=context.flosiDataStore.edit{it[Keys.currency]=CurrencyConverter.normalizeCode(v)}
-    suspend fun setLanguage(v:String)=context.flosiDataStore.edit{it[Keys.language]=v}
+    suspend fun setLanguage(v:String) {
+        require(FlosiLocales.isSupported(v)) { "Unsupported language: $v" }
+        context.flosiDataStore.edit { it[Keys.language] = v }
+    }
     suspend fun setBiometric(v:Boolean)=context.flosiDataStore.edit{it[Keys.biometric]=v}
     suspend fun setHideRecents(v:Boolean)=context.flosiDataStore.edit{it[Keys.hideRecents]=v}
     suspend fun setDailySummary(v:Boolean)=context.flosiDataStore.edit{it[Keys.dailySummary]=v}
