@@ -3,6 +3,7 @@ package com.flosi.app.settings
 import android.content.Context
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.flosi.app.finance.CurrencyConverter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -14,7 +15,8 @@ data class FlosiPreferencesState(
     val biometricLock: Boolean = false,
     val hideRecents: Boolean = false,
     val dailySummaryEnabled: Boolean = true,
-    val backupEnabled: Boolean = false
+    val backupEnabled: Boolean = false,
+    val exchangeRates: Set<String> = emptySet()
 )
 
 class FlosiPreferences(private val context: Context) {
@@ -25,6 +27,7 @@ class FlosiPreferences(private val context: Context) {
         val hideRecents = booleanPreferencesKey("hide_recents")
         val dailySummary = booleanPreferencesKey("daily_summary")
         val backup = booleanPreferencesKey("backup_enabled")
+        val exchangeRates = stringSetPreferencesKey("exchange_rates")
     }
 
     val state: Flow<FlosiPreferencesState> = context.flosiDataStore.data.map { p ->
@@ -34,14 +37,43 @@ class FlosiPreferences(private val context: Context) {
             biometricLock=p[Keys.biometric] ?: false,
             hideRecents=p[Keys.hideRecents] ?: false,
             dailySummaryEnabled=p[Keys.dailySummary] ?: true,
-            backupEnabled=p[Keys.backup] ?: false
+            backupEnabled=p[Keys.backup] ?: false,
+            exchangeRates=p[Keys.exchangeRates]?.toSet() ?: emptySet()
         )
     }
 
-    suspend fun setCurrency(v:String)=context.flosiDataStore.edit{it[Keys.currency]=v}
+    suspend fun setCurrency(v:String)=context.flosiDataStore.edit{it[Keys.currency]=CurrencyConverter.normalizeCode(v)}
     suspend fun setLanguage(v:String)=context.flosiDataStore.edit{it[Keys.language]=v}
     suspend fun setBiometric(v:Boolean)=context.flosiDataStore.edit{it[Keys.biometric]=v}
     suspend fun setHideRecents(v:Boolean)=context.flosiDataStore.edit{it[Keys.hideRecents]=v}
     suspend fun setDailySummary(v:Boolean)=context.flosiDataStore.edit{it[Keys.dailySummary]=v}
     suspend fun setBackup(v:Boolean)=context.flosiDataStore.edit{it[Keys.backup]=v}
+
+    suspend fun setExchangeRate(from:String,to:String,rawRate:String):Boolean {
+        val encoded=CurrencyConverter.encodeRate(from,to,rawRate) ?: return false
+        val parsed=CurrencyConverter.parseRate(encoded) ?: return false
+        context.flosiDataStore.edit { prefs ->
+            val current=(prefs[Keys.exchangeRates] ?: emptySet()).toMutableSet()
+            current.removeAll { entry ->
+                val r=CurrencyConverter.parseRate(entry)
+                r != null && ((r.from==parsed.from && r.to==parsed.to) || (r.from==parsed.to && r.to==parsed.from))
+            }
+            current.add(encoded)
+            prefs[Keys.exchangeRates]=current
+        }
+        return true
+    }
+
+    suspend fun removeExchangeRate(from:String,to:String) {
+        val f=CurrencyConverter.normalizeCode(from)
+        val t=CurrencyConverter.normalizeCode(to)
+        context.flosiDataStore.edit { prefs ->
+            val current=(prefs[Keys.exchangeRates] ?: emptySet()).toMutableSet()
+            current.removeAll { entry ->
+                val r=CurrencyConverter.parseRate(entry)
+                r != null && ((r.from==f && r.to==t) || (r.from==t && r.to==f))
+            }
+            prefs[Keys.exchangeRates]=current
+        }
+    }
 }
