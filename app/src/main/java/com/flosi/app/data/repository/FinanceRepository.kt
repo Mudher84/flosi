@@ -7,10 +7,15 @@ import com.flosi.app.data.local.entity.*
 import com.flosi.app.domain.model.CategorySpend
 import com.flosi.app.domain.model.DashboardSnapshot
 import com.flosi.app.domain.model.SearchHit
+import com.flosi.app.finance.CurrencyConverter
+import com.flosi.app.settings.FlosiPreferences
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
 
-class FinanceRepository(private val db: FlosiDatabase) {
+class FinanceRepository(
+    private val db: FlosiDatabase,
+    private val preferences: FlosiPreferences
+) {
     val accounts = db.accountDao().observeAll()
     val people = db.personDao().observeAll()
     val categories = db.categoryDao().observeAll()
@@ -19,6 +24,7 @@ class FinanceRepository(private val db: FlosiDatabase) {
     val budgets = db.budgetDao().observeActive()
     val goals = db.goalDao().observeActive()
     val invoices = db.invoiceDao().observeAll()
+    val preferenceState = preferences.state
 
     private fun startOfToday(): Long = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY,0); set(Calendar.MINUTE,0); set(Calendar.SECOND,0); set(Calendar.MILLISECOND,0)
@@ -28,21 +34,49 @@ class FinanceRepository(private val db: FlosiDatabase) {
         set(Calendar.DAY_OF_MONTH,1); set(Calendar.HOUR_OF_DAY,0); set(Calendar.MINUTE,0); set(Calendar.SECOND,0); set(Calendar.MILLISECOND,0)
     }.timeInMillis
 
-    private fun endOfNow(): Long = Long.MAX_VALUE
+    val dashboard: Flow<DashboardSnapshot> = combine(accounts,transactions,preferences.state) { accountList, txList, prefs ->
+        val base=CurrencyConverter.normalizeCode(prefs.currency)
+        val missing=linkedSetOf<String>()
+        fun convert(amount:Long,currency:String):Long? {
+            val value=CurrencyConverter.convert(amount,currency,base,prefs.exchangeRates)
+            if(value==null) missing += CurrencyConverter.normalizeCode(currency)
+            return value
+        }
 
-    val dashboard: Flow<DashboardSnapshot> = combine(
-        db.accountDao().observeTotalBalance(),
-        db.transactionDao().observeIncome(startOfMonth(), endOfNow()),
-        db.transactionDao().observeExpense(startOfMonth(), endOfNow()),
-        db.transactionDao().observeIncome(startOfToday(), endOfNow()),
-        db.transactionDao().observeExpense(startOfToday(), endOfNow())
-    ) { total, mi, me, ti, te ->
-        DashboardSnapshot(total, mi, me, ti, te)
+        val total=accountList.asSequence()
+            .filter{it.includeInTotal}
+            .mapNotNull{convert(it.currentBalance,it.currency)}
+            .sum()
+
+        val monthStart=startOfMonth()
+        val todayStart=startOfToday()
+        fun sumKinds(from:Long,kinds:Set<String>):Long = txList.asSequence()
+            .filter{it.occurredAt>=from && it.kind in kinds}
+            .mapNotNull{convert(it.amount,it.accountCurrency)}
+            .sum()
+
+        DashboardSnapshot(
+            totalBalance=total,
+            monthIncome=sumKinds(monthStart,setOf("income","invoice_payment")),
+            monthExpense=sumKinds(monthStart,setOf("expense")),
+            todayIncome=sumKinds(todayStart,setOf("income","invoice_payment")),
+            todayExpense=sumKinds(todayStart,setOf("expense")),
+            baseCurrency=base,
+            unconvertedCurrencies=missing.filter{it!=base}.sorted()
+        )
     }.distinctUntilChanged()
 
-    val topExpenseCategories: Flow<List<CategorySpend>> =
-        db.transactionDao().observeTopExpenseCategories(startOfMonth(), endOfNow())
-            .map { rows -> rows.map { CategorySpend(it.categoryId, it.categoryName ?: "بدون تصنيف", it.amount) } }
+    val topExpenseCategories: Flow<List<CategorySpend>> = combine(transactions,preferences.state) { txList,prefs ->
+        val base=CurrencyConverter.normalizeCode(prefs.currency)
+        val monthStart=startOfMonth()
+        txList.asSequence()
+            .filter{it.kind=="expense" && it.occurredAt>=monthStart}
+            .mapNotNull{tx->CurrencyConverter.convert(tx.amount,tx.accountCurrency,base,prefs.exchangeRates)?.let{tx to it}}
+            .groupBy({it.first.categoryName ?: "بدون تصنيف"},{it.second})
+            .map{(name,values)->CategorySpend(null,name,values.sum())}
+            .sortedByDescending{it.amount}
+            .take(8)
+    }
 
     suspend fun seedIfEmpty() {
         val existing = accounts.first()
@@ -51,16 +85,14 @@ class FinanceRepository(private val db: FlosiDatabase) {
             val cash = db.accountDao().insert(AccountEntity(name="كاش", type="cash", openingBalance=1_250_000, currentBalance=1_250_000))
             db.accountDao().insert(AccountEntity(name="مصرف الرافدين", type="bank", openingBalance=3_100_000, currentBalance=3_100_000))
             db.accountDao().insert(AccountEntity(name="زين كاش", type="wallet", openingBalance=500_000, currentBalance=500_000))
-            db.categoryDao().insertAll(
-                listOf(
-                    CategoryEntity(name="طعام ومطاعم",kind="expense",colorArgb=0xFFFF8B4A,system=true,sortOrder=1),
-                    CategoryEntity(name="مواصلات",kind="expense",colorArgb=0xFF3FA7F5,system=true,sortOrder=2),
-                    CategoryEntity(name="فواتير",kind="expense",colorArgb=0xFF8B5CF6,system=true,sortOrder=3),
-                    CategoryEntity(name="تسوق",kind="expense",colorArgb=0xFF31C68B,system=true,sortOrder=4),
-                    CategoryEntity(name="راتب",kind="income",colorArgb=0xFF31C68B,system=true,sortOrder=5),
-                    CategoryEntity(name="ديون",kind="both",colorArgb=0xFFFF6B72,system=true,sortOrder=6)
-                )
-            )
+            db.categoryDao().insertAll(listOf(
+                CategoryEntity(name="طعام ومطاعم",kind="expense",colorArgb=0xFFFF8B4A,system=true,sortOrder=1),
+                CategoryEntity(name="مواصلات",kind="expense",colorArgb=0xFF3FA7F5,system=true,sortOrder=2),
+                CategoryEntity(name="فواتير",kind="expense",colorArgb=0xFF8B5CF6,system=true,sortOrder=3),
+                CategoryEntity(name="تسوق",kind="expense",colorArgb=0xFF31C68B,system=true,sortOrder=4),
+                CategoryEntity(name="راتب",kind="income",colorArgb=0xFF31C68B,system=true,sortOrder=5),
+                CategoryEntity(name="ديون",kind="both",colorArgb=0xFFFF6B72,system=true,sortOrder=6)
+            ))
             db.personDao().insert(PersonEntity(name="أحمد محمد",phone="07701234567",openingBalance=125_000,currentBalance=125_000))
             addTransactionInternal(TransactionEntity(kind="expense",amount=25_000,title="وقود السيارة",accountId=cash,personId=null))
         }
@@ -92,8 +124,7 @@ class FinanceRepository(private val db: FlosiDatabase) {
     private suspend fun applyAccountingEffect(tx: TransactionEntity, reverse: Boolean) {
         val sign = when (tx.kind) {
             "income","transfer_in","invoice_payment" -> +1
-            "expense","transfer_out" -> -1
-            "debt_given" -> -1
+            "expense","transfer_out","debt_given" -> -1
             "debt_received" -> +1
             else -> 0
         } * if (reverse) -1 else 1
@@ -114,43 +145,17 @@ class FinanceRepository(private val db: FlosiDatabase) {
         require(fromAccountId != toAccountId) { "يجب اختيار حسابين مختلفين" }
         require(amount > 0) { "المبلغ يجب أن يكون أكبر من صفر" }
         require(fee >= 0) { "رسوم التحويل لا يمكن أن تكون سالبة" }
+        val from=db.accountDao().get(fromAccountId) ?: error("الحساب المصدر غير موجود")
+        val to=db.accountDao().get(toAccountId) ?: error("الحساب المستلم غير موجود")
+        val prefs=preferences.state.first()
+        val received=CurrencyConverter.convert(amount,from.currency,to.currency,prefs.exchangeRates)
+            ?: error("لا يوجد سعر تحويل من ${from.currency} إلى ${to.currency}")
         val now = System.currentTimeMillis()
-        val outId = db.transactionDao().insert(
-            TransactionEntity(
-                kind="transfer_out",
-                amount=amount,
-                title="تحويل صادر",
-                note=note,
-                accountId=fromAccountId,
-                occurredAt=now
-            )
-        )
-        val inId = db.transactionDao().insert(
-            TransactionEntity(
-                kind="transfer_in",
-                amount=amount,
-                title="تحويل وارد",
-                note=note,
-                accountId=toAccountId,
-                linkedTransactionId=outId,
-                occurredAt=now
-            )
-        )
-        if (fee > 0L) {
-            db.transactionDao().insert(
-                TransactionEntity(
-                    kind="expense",
-                    amount=fee,
-                    title="رسوم تحويل",
-                    note=note,
-                    accountId=fromAccountId,
-                    linkedTransactionId=outId,
-                    occurredAt=now
-                )
-            )
-        }
+        val outId = db.transactionDao().insert(TransactionEntity(kind="transfer_out",amount=amount,title="تحويل صادر",note=note,accountId=fromAccountId,occurredAt=now))
+        val inId = db.transactionDao().insert(TransactionEntity(kind="transfer_in",amount=received,title="تحويل وارد",note=note,accountId=toAccountId,linkedTransactionId=outId,occurredAt=now))
+        if (fee > 0L) db.transactionDao().insert(TransactionEntity(kind="expense",amount=fee,title="رسوم تحويل",note=note,accountId=fromAccountId,linkedTransactionId=outId,occurredAt=now))
         db.accountDao().adjustBalance(fromAccountId, -(amount+fee))
-        db.accountDao().adjustBalance(toAccountId, amount)
+        db.accountDao().adjustBalance(toAccountId, received)
         outId to inId
     }
 
