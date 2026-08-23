@@ -2,23 +2,58 @@
 'use strict';
 window.__FLOSI_SECURITY_RESET__=true;
 
-/* Keep selected language/currency optically centered in Chromium/Android. */
-if(!document.getElementById('flosi-select-center-fix')){
-  const style=document.createElement('style');
-  style.id='flosi-select-center-fix';
-  style.textContent=`
-    .localeSelectWrap{position:relative!important}
-    #settingsLang.localeSelect,#settingsCurrency.localeSelect{
-      appearance:none!important;-webkit-appearance:none!important;color:transparent!important;
-      caret-color:transparent!important;padding-left:56px!important;padding-right:56px!important;
-      background-image:linear-gradient(45deg,transparent 50%,#7b44ef 50%),linear-gradient(135deg,#7b44ef 50%,transparent 50%),linear-gradient(180deg,#fff,#faf8ff)!important;
-      background-position:36px 22px,42px 22px,0 0!important;background-size:7px 7px,7px 7px,100% 100%!important;background-repeat:no-repeat!important
-    }
-    #settingsLang.localeSelect option,#settingsCurrency.localeSelect option{color:#17131f!important;background:#fff!important}
-    .flosiCenteredSelectValue{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0 58px!important;pointer-events:none!important;color:#17131f!important;font:inherit!important;line-height:1!important;text-align:center!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;z-index:2!important}
+const STYLE_ID='flosi-ui-hardening-v3';
+if(!document.getElementById(STYLE_ID)){
+  const s=document.createElement('style');
+  s.id=STYLE_ID;
+  s.textContent=`
+  .localeSelectWrap{position:relative!important}
+  #settingsLang.localeSelect,#settingsCurrency.localeSelect{appearance:none!important;-webkit-appearance:none!important;color:transparent!important;caret-color:transparent!important;padding-inline:56px!important;background-image:linear-gradient(45deg,transparent 50%,#7b44ef 50%),linear-gradient(135deg,#7b44ef 50%,transparent 50%),linear-gradient(180deg,#fff,#faf8ff)!important;background-position:36px 22px,42px 22px,0 0!important;background-size:7px 7px,7px 7px,100% 100%!important;background-repeat:no-repeat!important}
+  #settingsLang.localeSelect option,#settingsCurrency.localeSelect option{color:#17131f!important;background:#fff!important}
+  .flosiCenteredSelectValue{position:absolute!important;inset:0!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0 58px!important;pointer-events:none!important;color:#17131f!important;font:inherit!important;line-height:1!important;text-align:center!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;z-index:2!important}
+
+  .flosiTxTypeNative{position:absolute!important;opacity:0!important;pointer-events:none!important;width:1px!important;height:1px!important;overflow:hidden!important}
+  .flosiTxTypeWrap{position:relative;margin-top:2px}
+  .flosiTxTypeButton{width:100%;height:54px;border:1.5px solid #b987ff;background:linear-gradient(180deg,#fff,#fbf9ff);border-radius:999px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 17px;box-shadow:0 0 0 4px rgba(123,68,239,.06),0 8px 22px rgba(63,40,92,.06);cursor:pointer;color:#17131f}
+  .flosiTxTypeButton:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(123,68,239,.13),0 8px 22px rgba(63,40,92,.08)}
+  .flosiTxTypeMain{display:flex;align-items:center;gap:10px;min-width:0}
+  .flosiTxTypeIcon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#f2eaff;color:#7b44ef;font-size:17px;flex:0 0 34px}
+  .flosiTxTypeLabel{font-size:13px;font-weight:600;white-space:nowrap}
+  .flosiTxChevron{color:#7b44ef;font-size:16px;transition:transform .18s ease}
+  .flosiTxTypeWrap.open .flosiTxChevron{transform:rotate(180deg)}
+  .flosiTxTypeMenu{position:absolute;left:0;right:0;top:calc(100% + 8px);z-index:220;background:#fff;border:1px solid #e7ddf5;border-radius:22px;padding:8px;box-shadow:0 24px 60px rgba(41,25,61,.22),0 8px 22px rgba(41,25,61,.08);display:none;overflow:hidden}
+  .flosiTxTypeWrap.open .flosiTxTypeMenu{display:block;animation:flosiMenuIn .16s ease-out}
+  .flosiTxTypeOption{width:100%;height:50px;border:0;background:#fff;border-radius:15px;padding:0 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;color:#17131f;cursor:pointer}
+  .flosiTxTypeOption+.flosiTxTypeOption{margin-top:5px}
+  .flosiTxTypeOption.active{background:linear-gradient(135deg,#f2eaff,#eee4ff);color:#6f35df;font-weight:700}
+  .flosiTxTypeOption .left{display:flex;align-items:center;gap:10px}
+  .flosiTxTypeOption .ico{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#f6f2fb;font-size:15px}
+  .flosiTxTypeOption[data-value=income] .ico{background:#e8f9f2;color:#18b97d}
+  .flosiTxTypeOption[data-value=expense] .ico{background:#f2eaff;color:#7b44ef}
+  .flosiTxTypeCheck{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#7b44ef;color:#fff;opacity:0;transform:scale(.8);transition:.15s}
+  .flosiTxTypeOption.active .flosiTxTypeCheck{opacity:1;transform:scale(1)}
+  @keyframes flosiMenuIn{from{opacity:0;transform:translateY(-5px) scale(.985)}to{opacity:1;transform:none}}
+
+  .flosiTxExtras{margin-top:12px;border:1px solid #ece6f4;border-radius:18px;background:#fbfaff;overflow:hidden}
+  .flosiTxExtrasToggle{width:100%;min-height:48px;border:0;background:transparent;padding:0 14px;display:flex;align-items:center;justify-content:space-between;color:#6d6575;cursor:pointer;font-weight:600}
+  .flosiTxExtrasToggle span:last-child{color:#7b44ef;transition:transform .18s}
+  .flosiTxExtras.open .flosiTxExtrasToggle span:last-child{transform:rotate(180deg)}
+  .flosiTxExtrasBody{display:none;padding:0 12px 12px}
+  .flosiTxExtras.open .flosiTxExtrasBody{display:block}
+  .flosiTxExtraGrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .flosiTxExtraField{display:grid;gap:5px;margin-top:9px}
+  .flosiTxExtraField.full{grid-column:1/-1}
+  .flosiTxExtraField label{font-size:9px!important;color:#7b7480!important;font-weight:600!important}
+  .flosiTxExtraField input,.flosiTxExtraField select,.flosiTxExtraField textarea{width:100%;border:1px solid #e5deed;border-radius:13px;background:#fff;padding:0 11px;outline:0}
+  .flosiTxExtraField input,.flosiTxExtraField select{height:43px}.flosiTxExtraField textarea{min-height:70px;padding-top:10px;resize:vertical}
+  .flosiTxExtraField input:focus,.flosiTxExtraField select:focus,.flosiTxExtraField textarea:focus{border-color:#b489ff;box-shadow:0 0 0 3px rgba(123,68,239,.08)}
+  .flosiTxToggleRow{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 1px 0;color:#6d6575;font-size:10px}
+  .flosiTxToggleRow input{accent-color:#7b44ef;width:18px;height:18px}
+  @media(max-width:420px){.flosiTxExtraGrid{grid-template-columns:1fr}}
   `;
-  document.head.appendChild(style);
+  document.head.appendChild(s);
 }
+
 function bindCenteredSelect(select){
   if(!select||select.dataset.flosiCentered==='1')return;
   const wrap=select.closest('.localeSelectWrap')||select.parentElement;if(!wrap)return;
@@ -30,79 +65,56 @@ function bindCenteredSelect(select){
 }
 function installCenteredSelectors(){bindCenteredSelect(document.getElementById('settingsLang'));bindCenteredSelect(document.getElementById('settingsCurrency'))}
 
-/*
- * Preview language hardening.
- * The original preview HTML is Arabic-first. The main locale runtime translates
- * dictionary-backed strings. This layer guarantees that a non-Arabic locale never
- * leaves Arabic UI behind: known strings use the requested dictionary; newer
- * preview-only strings use a curated translation (Chinese) or English fallback.
- */
 const AR=/[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]/;
-const sourceText=new WeakMap();
-const EN={
-'إعدادات عالمية':'Global settings','اللغة والعملة':'Language & currency','تجربة مالية تتكيف مع لغتك، منطقتك وطريقة عرض الأرقام':'A financial experience adapted to your language, region and number format',
-'إعدادك الحالي':'Current setup','متزامن على هذا الجهاز':'Synced on this device','اتجاه الواجهة':'Interface direction','العملة':'Currency','لغة التنسيق':'Formatting locale',
-'اقتراح Flosi الذكي':'Flosi smart suggestion','نقدر نضبط اللغة والعملة تلقائياً حسب إعدادات جهازك، بدون ربط التطبيق بدولة محددة.':'We can set language and currency automatically from your device settings without tying Flosi to one country.',
-'تطبيق':'Apply','لغة التطبيق':'App language','تحدد اتجاه القراءة وتنسيق التاريخ والأرقام':'Controls reading direction and date/number formatting','كل اللغات':'All languages',
-'العملة الأساسية':'Base currency','تستخدم في الملخصات، التقارير والأهداف':'Used in summaries, reports and goals','كل العملات':'All currencies','معاينة فورية':'Live preview','تتحدث تلقائياً':'Updates automatically',
-'هكذا ستظهر القيم في الواجهة والتقارير':'This is how values will appear across the app and reports','التاريخ':'Date','الاتجاه':'Direction','مثال صغير':'Compact example',
-'حفظ وتطبيق الإعدادات':'Save & apply settings','يحفظ Flosi تفضيلاتك على هذا الجهاز ويستخدمها في العرض والتقارير.':'Flosi saves these preferences on this device and uses them throughout the app and reports.',
-'واجهة RTL':'RTL interface','واجهة LTR':'LTR interface','تنسيق أرقام عربي':'Arabic number formatting','من اليمين إلى اليسار':'Right to left','من اليسار إلى اليمين':'Left to right',
-'اليوم':'Today','الحركات':'Transactions','الذكاء':'Insights','أنا':'Me','صباح الخير':'Good morning','هذا ملخص وضعك المالي اليوم':'Here is your financial summary for today','صافي ثروتك':'Net worth',
-'المتاح للصرف بأمان':'Safe to spend','توقع نهاية الشهر':'End-of-month forecast','الدخل هذا الشهر':'Income this month','المصروف هذا الشهر':'Expenses this month','التزامات قريبة':'Upcoming commitments','نسبة الادخار':'Savings rate',
-'قراراتك القادمة':'Your next decisions','عرض الذكاء المالي':'View financial insights','إذا استمريت بنفس المعدل':'If you keep the same pace','الرصيد المتوقع بنهاية الشهر':'Expected balance at month end','هدف السفر':'Travel goal',
-'الالتزامات القادمة':'Upcoming commitments','عرض الكل':'View all','الإيجار':'Rent','بعد يومين':'In 2 days','اشتراك الإنترنت':'Internet subscription','بعد 3 أيام':'In 3 days','اشتراك رقمي':'Digital subscription','بعد 5 أيام':'In 5 days',
-'فتح':'Open','ثلاث ملاحظات مهمة اليوم':'Three important notes today','إجراءات سريعة':'Quick actions','حركة':'Transaction','هدف':'Goal','ماذا لو':'What if','آخر الحركات':'Recent transactions','التسوق':'Shopping','راتب':'Salary','الحساب الرئيسي':'Main account',
-'كل أموالك':'All your money','الذكاء المالي':'Financial insights','مو بس شنو صار، بل شنو راح يصير وشنو الأفضل تسوي':'Not only what happened, but what may happen next and what you can do better','ماذا لو؟':'What if?',
-'إذا اشتريت شيء بهذا السعر':'If you buy something at this price','احسب التأثير':'Calculate impact','تحليل اليوم':'Today’s analysis','المستقبل':'Future','التخطيط':'Planning','السفر':'Travel','صندوق الطوارئ':'Emergency fund',
-'الخصوصية والتخصيص':'Privacy & personalization','إعداداتك، بياناتك وحماية حسابك':'Your settings, data and account protection','ملفك المالي':'Your financial profile','خصوصية عالية • بياناتك تحت سيطرتك':'High privacy • Your data stays under your control','محمي':'Protected',
-'الأمان':'Security','بصمة، PIN، قفل تلقائي وحماية اللقطات':'Biometrics, PIN, auto-lock and screenshot protection','النسخ الاحتياطي المشفر':'Encrypted backup','نسخ واستعادة آمنة وتحكم كامل ببياناتك':'Secure backup and restore with full control of your data',
-'ميزات متقدمة لإدارة أموالك':'Advanced features for managing your money','فلوسي برو':'Flosi Pro','ابدأ التجربة':'Start trial','الخصوصية':'Privacy','حماية ذكية لأموالك وبياناتك الحساسة':'Smart protection for your money and sensitive data',
-'مستوى الحماية':'Protection level','ممتاز':'Excellent','جميع طبقات الحماية الأساسية فعّالة':'All essential protection layers are active','طبقات':'Layers','آخر فتح آمن':'Last secure unlock','الآن • هذا الجهاز':'Now • This device','حالة الجلسة':'Session status','محمية محلياً':'Protected locally',
-'طبقات الحماية':'Protection layers','اضبط مستوى الأمان حسب استخدامك':'Adjust security to match how you use Flosi','مفعّلة':'enabled','البصمة والوجه':'Biometrics','فتح سريع وآمن بالقياسات الحيوية':'Fast, secure biometric unlock','مفعّل':'Enabled','متوقف':'Off',
-'رمز PIN':'PIN','طبقة احتياطية عند تعذر البصمة':'Backup unlock when biometrics are unavailable','القفل التلقائي':'Auto-lock','يقفل Flosi بعد مغادرة التطبيق أو الخمول':'Locks Flosi after leaving the app or inactivity','حماية لقطات الشاشة':'Screenshot protection','يخفي الأرصدة والمعلومات الحساسة':'Hides balances and sensitive information',
-'توصية Flosi الذكية':'Flosi smart recommendation','إذا تستخدم التطبيق خارج البيت كثيراً، خلّي كل طبقات الحماية مفعّلة حتى ما تظهر أرصدتك في Recent Apps أو اللقطات.':'If you often use Flosi away from home, keep all protection layers enabled so balances stay hidden from Recent Apps and screenshots.',
-'إضافة حركة':'Add transaction','البيان':'Description','المبلغ':'Amount','النوع':'Type','مصروف':'Expense','دخل':'Income','حفظ':'Save','إلغاء':'Cancel','الآن':'Now'
-};
-const ZH={
-'Global settings':'全局设置','Language & currency':'语言与货币','A financial experience adapted to your language, region and number format':'根据你的语言、地区和数字格式自动调整的财务体验','Current setup':'当前设置','Synced on this device':'已在此设备同步','Interface direction':'界面方向','Currency':'货币','Formatting locale':'格式区域',
-'Flosi smart suggestion':'Flosi 智能建议','We can set language and currency automatically from your device settings without tying Flosi to one country.':'可根据设备设置自动选择语言和货币，而不绑定特定国家。','Apply':'应用','App language':'应用语言','Controls reading direction and date/number formatting':'决定阅读方向以及日期和数字格式','All languages':'所有语言','Base currency':'基础货币','Used in summaries, reports and goals':'用于摘要、报表和目标','All currencies':'所有货币','Live preview':'实时预览','Updates automatically':'自动更新','This is how values will appear across the app and reports':'数值将在应用和报表中按此格式显示','Date':'日期','Direction':'方向','Compact example':'简短示例','Save & apply settings':'保存并应用设置','Flosi saves these preferences on this device and uses them throughout the app and reports.':'Flosi 会在此设备保存这些偏好，并应用到整个应用和报表。',
-'Today':'今日','Transactions':'交易','Insights':'智能分析','Me':'我的','Good morning':'早上好','Here is your financial summary for today':'这是你今天的财务摘要','Net worth':'净资产','Safe to spend':'可安全支出','End-of-month forecast':'月末预测','Income this month':'本月收入','Expenses this month':'本月支出','Upcoming commitments':'近期应付款','Savings rate':'储蓄率','Your next decisions':'下一步决策','View financial insights':'查看财务分析','View all':'查看全部','Rent':'房租','Internet subscription':'网络订阅','Digital subscription':'数字订阅','Quick actions':'快捷操作','Transaction':'交易','Goal':'目标','What if':'情景模拟','Recent transactions':'最近交易','Shopping':'购物','Salary':'工资','Main account':'主账户','All your money':'全部资金','Financial insights':'财务智能','Future':'未来','Planning':'规划','Travel':'旅行','Emergency fund':'应急基金','Privacy & personalization':'隐私与个性化','Your settings, data and account protection':'你的设置、数据和账户保护','Your financial profile':'你的财务档案','Protected':'已保护','Security':'安全','Encrypted backup':'加密备份','Advanced features for managing your money':'高级资金管理功能','Start trial':'开始试用','Privacy':'隐私','Protection level':'保护级别','Excellent':'优秀','Protection layers':'保护层','Biometrics':'生物识别','Enabled':'已启用','Off':'已关闭','PIN':'PIN','Auto-lock':'自动锁定','Screenshot protection':'截图保护','Add transaction':'添加交易','Description':'说明','Amount':'金额','Type':'类型','Expense':'支出','Income':'收入','Save':'保存','Cancel':'取消','Now':'现在'
+const originalText=new WeakMap();
+const fallback={
+'إعدادات عالمية':'Global settings','اللغة والعملة':'Language & currency','لغة التطبيق':'App language','العملة الأساسية':'Base currency','كل اللغات':'All languages','كل العملات':'All currencies','معاينة فورية':'Live preview','حفظ وتطبيق الإعدادات':'Save & apply settings','اليوم':'Today','الحركات':'Transactions','الذكاء':'Insights','أنا':'Me','صباح الخير':'Good morning','الأمان':'Security','الخصوصية':'Privacy','إضافة حركة':'Add transaction','البيان':'Description','المبلغ':'Amount','النوع':'Type','مصروف':'Expense','دخل':'Income','حفظ':'Save','إلغاء':'Cancel','تفاصيل إضافية':'More details','التصنيف':'Category','الحساب':'Account','التاريخ':'Date','ملاحظة':'Note','حركة متكررة':'Recurring transaction','إرفاق إيصال':'Attach receipt','الحساب الرئيسي':'Main account','عام':'General'
 };
 function currentLang(){return localStorage.getItem('flosi-lang-preview')||localStorage.getItem('flosi-lang')||'ar'}
-function reverseDictionary(){
-  const map=new Map(),i18n=window.FLOSI_I18N||{},ar=i18n.ar&&i18n.ar.t;
-  if(ar)Object.entries(ar).forEach(([k,v])=>typeof v==='string'&&map.set(v,k));return map;
-}
-function translateNodeText(base,lang,reverse){
-  if(lang==='ar')return base;
-  const trim=base.trim();if(!trim)return base;
-  let translated=null,key=reverse.get(trim),target=window.FLOSI_I18N&&window.FLOSI_I18N[lang]&&window.FLOSI_I18N[lang].t;
-  if(key&&target&&target[key])translated=target[key];
-  if(!translated){const en=EN[trim];if(en)translated=(lang==='zh-CN'&&ZH[en])?ZH[en]:en}
-  if(!translated&&AR.test(trim))translated=trim.replace(/[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+(?:\s+[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+)*/g,'').replace(/\s{2,}/g,' ').trim();
-  if(!translated)return base;
-  const at=base.indexOf(trim);return base.slice(0,at)+translated+base.slice(at+trim.length);
+function reverseArabic(){const m=new Map(),d=window.FLOSI_I18N&&window.FLOSI_I18N.ar&&window.FLOSI_I18N.ar.t;if(d)Object.entries(d).forEach(([k,v])=>typeof v==='string'&&m.set(v,k));return m}
+function translateText(base,lang,rev){
+  if(lang==='ar')return base;const t=base.trim();if(!t)return base;
+  const key=rev.get(t),dict=window.FLOSI_I18N&&window.FLOSI_I18N[lang]&&window.FLOSI_I18N[lang].t;
+  let out=key&&dict&&dict[key]?dict[key]:fallback[t];
+  if(!out&&AR.test(t))out=t.replace(/[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+(?:\s+[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+)*/g,'').replace(/\s{2,}/g,' ').trim();
+  if(!out)return base;const i=base.indexOf(t);return base.slice(0,i)+out+base.slice(i+t.length);
 }
 let translating=false;
-function applyNoArabicLeak(){
+function hardenLocale(){
   if(translating)return;translating=true;
-  try{
-    const lang=currentLang();if(lang==='ar')return;
-    const reverse=reverseDictionary(),root=document.body;if(!root)return;
-    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
-    nodes.forEach(n=>{
-      const p=n.parentElement;if(!p||p.closest('script,style,select,option,textarea,input,.flosiCenteredSelectValue,[data-locale-no-transform]'))return;
-      if(!sourceText.has(n))sourceText.set(n,n.nodeValue||'');
-      const base=sourceText.get(n)||'';const next=translateNodeText(base,lang,reverse);if(next!==n.nodeValue)n.nodeValue=next;
-    });
-  }finally{translating=false}
+  try{const lang=currentLang();if(lang==='ar')return;const rev=reverseArabic();const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);const ns=[];while(w.nextNode())ns.push(w.currentNode);ns.forEach(n=>{const p=n.parentElement;if(!p||p.closest('script,style,select,option,textarea,input,.flosiCenteredSelectValue,[data-locale-no-transform]'))return;if(!originalText.has(n))originalText.set(n,n.nodeValue||'');const b=originalText.get(n)||'',x=translateText(b,lang,rev);if(x!==n.nodeValue)n.nodeValue=x})}finally{translating=false}
 }
-function refreshLocaleHardening(){installCenteredSelectors();requestAnimationFrame(()=>{applyNoArabicLeak();installCenteredSelectors()})}
-installCenteredSelectors();applyNoArabicLeak();
-document.addEventListener('DOMContentLoaded',refreshLocaleHardening,{once:true});
-document.addEventListener('change',e=>{if(e.target&&['settingsLang','settingsCurrency'].includes(e.target.id))setTimeout(refreshLocaleHardening,0)});
-document.addEventListener('click',e=>{if(e.target.closest('#settingsSaveLocale,#localeApplySmart,[data-go]'))setTimeout(refreshLocaleHardening,0)});
-new MutationObserver(ms=>{if(translating)return;if(ms.some(m=>m.addedNodes&&m.addedNodes.length))requestAnimationFrame(refreshLocaleHardening)}).observe(document.documentElement,{childList:true,subtree:true});
-setTimeout(refreshLocaleHardening,0);
+
+function ensureTransactionTypeCapsule(){
+  const select=document.getElementById('txType');
+  if(!select||select.dataset.flosiCapsule==='1')return;
+  select.dataset.flosiCapsule='1';select.classList.add('flosiTxTypeNative');
+  const field=select.closest('.field')||select.parentElement;if(!field)return;
+  const wrap=document.createElement('div');wrap.className='flosiTxTypeWrap';wrap.setAttribute('data-locale-no-transform','');
+  wrap.innerHTML=`<button type="button" class="flosiTxTypeButton" aria-haspopup="listbox" aria-expanded="false"><span class="flosiTxTypeMain"><span class="flosiTxTypeIcon">↘</span><span class="flosiTxTypeLabel"></span></span><span class="flosiTxChevron">⌄</span></button><div class="flosiTxTypeMenu" role="listbox"><button type="button" class="flosiTxTypeOption" data-value="expense"><span class="left"><span class="ico">↘</span><span>مصروف</span></span><span class="flosiTxTypeCheck">✓</span></button><button type="button" class="flosiTxTypeOption" data-value="income"><span class="left"><span class="ico">↗</span><span>دخل</span></span><span class="flosiTxTypeCheck">✓</span></button></div>`;
+  select.insertAdjacentElement('afterend',wrap);
+  const btn=wrap.querySelector('.flosiTxTypeButton'),label=wrap.querySelector('.flosiTxTypeLabel'),icon=wrap.querySelector('.flosiTxTypeIcon');
+  const optionText=v=>v==='income'?'دخل':'مصروف';
+  const sync=()=>{const v=select.value==='income'?'income':'expense';label.textContent=optionText(v);icon.textContent=v==='income'?'↗':'↘';icon.style.color=v==='income'?'#18b97d':'#7b44ef';icon.style.background=v==='income'?'#e8f9f2':'#f2eaff';wrap.querySelectorAll('.flosiTxTypeOption').forEach(o=>o.classList.toggle('active',o.dataset.value===v))};
+  btn.addEventListener('click',e=>{e.stopPropagation();const open=wrap.classList.toggle('open');btn.setAttribute('aria-expanded',String(open))});
+  wrap.querySelectorAll('.flosiTxTypeOption').forEach(o=>o.addEventListener('click',()=>{select.value=o.dataset.value;select.dispatchEvent(new Event('change',{bubbles:true}));wrap.classList.remove('open');btn.setAttribute('aria-expanded','false');sync()}));
+  document.addEventListener('click',e=>{if(!wrap.contains(e.target)){wrap.classList.remove('open');btn.setAttribute('aria-expanded','false')}});
+  select.addEventListener('change',sync);sync();
+
+  if(!document.getElementById('flosiTxExtras')){
+    const extras=document.createElement('div');extras.id='flosiTxExtras';extras.className='flosiTxExtras';extras.setAttribute('data-locale-no-transform','');
+    extras.innerHTML=`<button type="button" class="flosiTxExtrasToggle"><span>تفاصيل إضافية</span><span>⌄</span></button><div class="flosiTxExtrasBody"><div class="flosiTxExtraGrid"><div class="flosiTxExtraField"><label>التصنيف</label><select id="txCategory"><option>عام</option><option>طعام</option><option>تسوق</option><option>مواصلات</option><option>فواتير</option><option>راتب</option></select></div><div class="flosiTxExtraField"><label>الحساب</label><select id="txAccount"><option>الحساب الرئيسي</option><option>نقداً</option><option>مصرف</option></select></div><div class="flosiTxExtraField full"><label>التاريخ</label><input id="txDate" type="datetime-local"></div><div class="flosiTxExtraField full"><label>ملاحظة</label><textarea id="txNote" placeholder="اختياري"></textarea></div><label class="flosiTxToggleRow"><span>حركة متكررة</span><input id="txRecurring" type="checkbox"></label><label class="flosiTxToggleRow"><span>إرفاق إيصال</span><input id="txReceipt" type="checkbox"></label></div></div>`;
+    field.insertAdjacentElement('afterend',extras);
+    extras.querySelector('.flosiTxExtrasToggle').addEventListener('click',()=>extras.classList.toggle('open'));
+    const d=extras.querySelector('#txDate');if(d&&!d.value){const n=new Date(),off=n.getTimezoneOffset();d.value=new Date(n.getTime()-off*60000).toISOString().slice(0,16)}
+  }
+}
+
+function refresh(){installCenteredSelectors();ensureTransactionTypeCapsule();requestAnimationFrame(hardenLocale)}
+refresh();
+document.addEventListener('DOMContentLoaded',refresh,{once:true});
+document.addEventListener('change',e=>{if(e.target&&['settingsLang','settingsCurrency'].includes(e.target.id))setTimeout(refresh,0)});
+document.addEventListener('click',e=>{if(e.target.closest('#settingsSaveLocale,#localeApplySmart,[data-go],#addBtn,#quickAdd'))setTimeout(refresh,0)});
+new MutationObserver(ms=>{if(translating)return;if(ms.some(m=>m.addedNodes&&m.addedNodes.length))requestAnimationFrame(refresh)}).observe(document.documentElement,{childList:true,subtree:true});
+setTimeout(refresh,0);
 })();
