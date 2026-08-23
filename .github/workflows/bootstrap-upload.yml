@@ -1,16 +1,16 @@
 name: Bootstrap Flosi Source
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - bootstrap/READY
+  workflow_dispatch:
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
   unpack:
+    if: github.event_name == 'workflow_dispatch' || github.event.issue.title == 'BOOTSTRAP_FLOSI_SOURCE'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
