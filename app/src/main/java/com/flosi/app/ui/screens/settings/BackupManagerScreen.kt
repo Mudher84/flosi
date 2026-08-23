@@ -1,5 +1,7 @@
 package com.flosi.app.ui.screens.settings
 
+import android.app.Activity
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -44,10 +46,13 @@ fun BackupManagerScreen(onBack:()->Unit){
             runCatching{
                 val bytes=EncryptedBackupService.restoreToTemp(context,it,password.toCharArray())
                 EncryptedBackupService.applyRestore(context,app.database,bytes)
+                app.reloadAfterRestore()
             }.onSuccess{
-                status="تم فك النسخة وفحص SQLite وquick_check والجداول ثم الاسترجاع بأمان. أغلق التطبيق وافتحه من جديد."
                 success=true
                 password=""
+                status="تم فحص النسخة واسترجاعها وإعادة فتح قاعدة البيانات."
+                Toast.makeText(context,"تم استرجاع نسخة Flosi بنجاح",Toast.LENGTH_LONG).show()
+                (context as? Activity)?.recreate()
             }.onFailure{e->
                 status=e.message?:"فشل الاسترجاع"
                 success=false
