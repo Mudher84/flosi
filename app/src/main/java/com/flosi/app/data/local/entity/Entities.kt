@@ -1,5 +1,6 @@
 package com.flosi.app.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -92,7 +93,7 @@ data class BudgetEntity(
     val title: String,
     val categoryId: Long? = null,
     val limitAmount: Long,
-    val currency: String = "IQD",
+    @ColumnInfo(defaultValue = "'IQD'") val currency: String = "IQD",
     val periodStart: Long,
     val periodEnd: Long,
     val warningPercent: Int = 80,
