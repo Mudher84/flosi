@@ -21,30 +21,22 @@ private val legacySourceKeys = mapOf(
 )
 
 private val englishLegacy = mapOf(
-    "صباح الخير" to "Good morning",
-    "فلوسي" to "Flosi",
-    "إجمالي أموالك" to "Total balance",
-    "المقبوض اليوم" to "Received today",
-    "المصروف اليوم" to "Spent today",
-    "آخر الحركات" to "Recent transactions",
-    "عرض الكل" to "View all",
-    "ماكو حركات بعد" to "No transactions yet",
-    "أعلى المصروفات" to "Top expenses",
-    "تظهر بعد تسجيل مصروفات" to "Appears after you record expenses",
-    "هذا الشهر" to "This month",
-    "دخل هذا الشهر" to "Income this month",
-    "مصروف هذا الشهر" to "Expenses this month",
-    "المتاح للصرف بأمان" to "Safe to spend",
-    "لا توجد مبالغ محجوزة حالياً" to "No reserved amounts right now",
-    "ملخص فلوسي" to "Flosi brief",
-    "ذكي" to "Smart",
+    "صباح الخير" to "Good morning","فلوسي" to "Flosi","إجمالي أموالك" to "Total balance","المقبوض اليوم" to "Received today",
+    "المصروف اليوم" to "Spent today","آخر الحركات" to "Recent transactions","عرض الكل" to "View all","ماكو حركات بعد" to "No transactions yet",
+    "أعلى المصروفات" to "Top expenses","تظهر بعد تسجيل مصروفات" to "Appears after you record expenses","هذا الشهر" to "This month",
+    "دخل هذا الشهر" to "Income this month","مصروف هذا الشهر" to "Expenses this month","المتاح للصرف بأمان" to "Safe to spend",
+    "لا توجد مبالغ محجوزة حالياً" to "No reserved amounts right now","ملخص فلوسي" to "Flosi brief","ذكي" to "Smart",
     "أضف دخلك حتى أحسب وضعك المالي بدقة" to "Add your income so Flosi can calculate your financial position accurately",
     "مصروفك مضبوط، عندك مساحة جيدة للادخار" to "Your spending is controlled and you have good room to save",
     "وضعك متوازن، راقب المصاريف غير الضرورية" to "Your position is balanced; keep an eye on non-essential spending",
     "مصروفك مرتفع مقارنة بالدخل هذا الشهر" to "Your spending is high compared with income this month",
-    "إعدادات محفوظة ومحرك تحويل واضح" to "Saved settings with a clear conversion engine",
-    "سعر يدوي" to "Manual rate",
-    "لا توجد أسعار مضافة بعد" to "No exchange rates added yet"
+    "إعدادات محفوظة ومحرك تحويل واضح" to "Saved settings with a clear conversion engine","سعر يدوي" to "Manual rate",
+    "لا توجد أسعار مضافة بعد" to "No exchange rates added yet","كل شيء مسجل" to "Everything is recorded",
+    "صافي الحركات المعروضة" to "Net of shown transactions","متعدد العملات" to "Multiple currencies",
+    "لا يتم جمع عملات مختلفة كأنها وحدة واحدة." to "Different currencies are never added as if they were one unit.",
+    "السجل" to "History","ماكو حركات مطابقة" to "No matching transactions","إعداداتك ومساحتك" to "Your settings and space",
+    "فلوسي الشخصي" to "Personal Flosi","أموالك" to "Your money","خطط الصرف" to "Spending plans","القادم عليك" to "Upcoming obligations",
+    "بيع وقبض" to "Sales and collections","حماية" to "Protection"
 )
 
 @Composable
