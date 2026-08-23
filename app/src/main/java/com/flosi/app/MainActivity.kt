@@ -15,6 +15,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import com.flosi.app.auth.FlosiAuthGate
 import com.flosi.app.i18n.FlosiLocales
+import com.flosi.app.i18n.LocalFlosiLanguage
+import com.flosi.app.i18n.flosiText
 import com.flosi.app.security.BiometricGate
 import com.flosi.app.settings.FlosiPreferencesState
 import com.flosi.app.ui.navigation.FlosiApp
@@ -47,7 +49,10 @@ class MainActivity : FragmentActivity() {
             val locale = remember(prefs.language) { FlosiLocales.get(prefs.language) }
             LaunchedEffect(locale.code) { Locale.setDefault(locale.locale()) }
 
-            CompositionLocalProvider(LocalLayoutDirection provides locale.layoutDirection) {
+            CompositionLocalProvider(
+                LocalLayoutDirection provides locale.layoutDirection,
+                LocalFlosiLanguage provides locale.code
+            ) {
                 FlosiTheme {
                     FlosiAuthGate {
                         if (unlocked || !gateEnabled) {
@@ -88,9 +93,9 @@ private fun LockedScreen(onUnlock: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Flosi", style = MaterialTheme.typography.headlineLarge)
-            Text("التطبيق مقفول")
+            Text(flosiText("security"))
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onUnlock) { Text("فتح بالبصمة أو الوجه") }
+            Button(onClick = onUnlock) { Text(flosiText("fingerprint")) }
         }
     }
 }
