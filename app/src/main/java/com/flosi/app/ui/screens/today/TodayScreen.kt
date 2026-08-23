@@ -36,7 +36,8 @@ fun TodayScreen(
     val state by vm.state.collectAsState()
 
     val netMonth = state.dashboard.monthIncome - state.dashboard.monthExpense
-    val safeToSpend = max(0L, state.dashboard.totalBalance - state.dashboard.monthExpense)
+    val reservedTotal = state.reservedCommitments + state.reservedGoals
+    val safeToSpend = max(0L, state.dashboard.totalBalance - reservedTotal)
 
     LazyColumn(
         modifier = Modifier
@@ -90,7 +91,13 @@ fun TodayScreen(
             }
         }
 
-        item { SafeSpendCard(safeToSpend, netMonth) }
+        item {
+            SafeSpendCard(
+                safeToSpend = safeToSpend,
+                reservedCommitments = state.reservedCommitments,
+                reservedGoals = state.reservedGoals
+            )
+        }
         item { SmartInsightCard(state.dashboard.monthIncome, state.dashboard.monthExpense) }
 
         item { SectionTitle("آخر الحركات", "عرض الكل", onActivity) }
@@ -259,7 +266,12 @@ private fun SnapshotCard(
 }
 
 @Composable
-private fun SafeSpendCard(safeToSpend: Long, monthNet: Long) {
+private fun SafeSpendCard(
+    safeToSpend: Long,
+    reservedCommitments: Long,
+    reservedGoals: Long
+) {
+    val reservedTotal = reservedCommitments + reservedGoals
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(24.dp),
@@ -270,8 +282,12 @@ private fun SafeSpendCard(safeToSpend: Long, monthNet: Long) {
                 Text("المتاح للصرف بأمان", color = FlosiMuted, fontSize = 11.sp)
                 Text(moneyText(safeToSpend), color = FlosiText, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    if (monthNet >= 0) "وضعك هذا الشهر إيجابي" else "راجع مصروفك هذا الشهر",
-                    color = if (monthNet >= 0) FlosiGreen else FlosiRed,
+                    if (reservedTotal > 0L) {
+                        "بعد حجز ${moneyText(reservedCommitments)} للالتزامات و ${moneyText(reservedGoals)} للأهداف"
+                    } else {
+                        "لا توجد مبالغ محجوزة حالياً"
+                    },
+                    color = if (reservedTotal > 0L) FlosiPurple else FlosiGreen,
                     fontSize = 10.sp
                 )
             }
