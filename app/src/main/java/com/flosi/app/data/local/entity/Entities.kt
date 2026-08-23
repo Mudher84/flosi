@@ -27,6 +27,7 @@ data class PersonEntity(
     val name: String,
     val phone: String = "",
     val note: String = "",
+    @ColumnInfo(defaultValue = "'IQD'") val currency: String = "IQD",
     val openingBalance: Long = 0,
     val currentBalance: Long = 0,
     val archived: Boolean = false,
