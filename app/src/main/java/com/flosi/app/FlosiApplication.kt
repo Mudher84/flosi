@@ -23,8 +23,8 @@ class FlosiApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         database = FlosiDatabase.get(this)
-        repository = FinanceRepository(database)
         preferences = FlosiPreferences(this)
+        repository = FinanceRepository(database,preferences)
 
         appScope.launch { repository.seedIfEmpty() }
         FlosiWorkScheduler.ensureScheduled(this)
