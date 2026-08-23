@@ -57,5 +57,12 @@ abstract class FlosiDatabase : RoomDatabase() {
                     .build()
                     .also { instance = it }
             }
+
+        fun resetInstance() {
+            synchronized(this) {
+                runCatching { instance?.close() }
+                instance = null
+            }
+        }
     }
 }
