@@ -119,6 +119,7 @@ data class InvoiceEntity(
     val type: String = "sale",
     val personId: Long? = null,
     val status: String = "draft",
+    @ColumnInfo(defaultValue = "'IQD'") val currency: String = "IQD",
     val subtotal: Long,
     val discount: Long = 0,
     val total: Long,
