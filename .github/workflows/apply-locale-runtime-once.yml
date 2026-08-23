@@ -1,0 +1,58 @@
+name: Apply Flosi locale runtime once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-locale-runtime-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate locale runtime
+        run: |
+          node --check preview/i18n.js
+          node --check preview/flosi-locale-runtime.js
+      - name: Wire locale runtime
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('preview/flosi2.html')
+          s=p.read_text(encoding='utf-8')
+          tags='''<script src="i18n.js?v=20260823-global-locale"></script>\n<script src="flosi-locale-runtime.js?v=20260823-global-locale"></script>'''
+          if 'flosi-locale-runtime.js' not in s:
+              s=s.replace('</body>',tags+'\n</body>',1)
+          elif 'i18n.js' not in s:
+              s=s.replace('<script src="flosi-locale-runtime.js', '<script src="i18n.js?v=20260823-global-locale"></script>\n<script src="flosi-locale-runtime.js',1)
+          p.write_text(s,encoding='utf-8')
+
+          idx=Path('preview/index.html')
+          t=idx.read_text(encoding='utf-8')
+          t=re.sub(r'flosi2\.html\?v=[^\"\']+','flosi2.html?v=20260823-global-locale',t)
+          idx.write_text(t,encoding='utf-8')
+
+          assert 'flosi-locale-runtime.js' in s
+          assert 'i18n.js' in s
+          PY
+      - name: Commit locale wiring
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No changes needed.'
+            exit 0
+          fi
+          git config user.name 'Flosi Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add preview/flosi2.html preview/index.html
+          git commit -m 'fix: apply selected language and currency globally'
+          git push origin main
