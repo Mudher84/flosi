@@ -1,0 +1,40 @@
+name: Flosi Locale Zero Once
+on:
+  push:
+    paths:
+      - '.github/workflows/locale-zero-once.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh runtime URLs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path('preview/flosi2.html')
+          text=html.read_text(encoding='utf-8')
+          old='flosi-locale-runtime.js?v=20260823-global-locale'
+          new='flosi-locale-runtime.js?v=20260823-zero-iqd-1'
+          if old not in text and new not in text:
+              raise SystemExit('locale runtime script anchor not found')
+          text=text.replace(old,new)
+          html.write_text(text,encoding='utf-8')
+
+          index=Path('preview/index.html')
+          text=index.read_text(encoding='utf-8')
+          text=text.replace('flosi2.html?v=20260823-state5','flosi2.html?v=20260823-zero-iqd-1')
+          index.write_text(text,encoding='utf-8')
+          PY
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          rm .github/workflows/locale-zero-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add preview/flosi2.html preview/index.html .github/workflows/locale-zero-once.yml
+          git commit -m 'fix: center locale values, honor IQD and zero preview data'
+          git push
