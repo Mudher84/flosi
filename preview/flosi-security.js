@@ -1,76 +1,48 @@
 (()=>{
 'use strict';
-if(window.__FLOSI_SECURITY_CENTER_V3__)return;
-window.__FLOSI_SECURITY_CENTER_V3__=true;
+if(window.__FLOSI_SECURITY_CENTER_V4__)return;
+window.__FLOSI_SECURITY_CENTER_V4__=true;
 
 const K={
- finger:'flosi-sec-fingerprint-v2',
- face:'flosi-sec-face-v2',
- auto:'flosi-sec-autolock-v2',
- shot:'flosi-sec-screenshot-v2'
+ finger:'flosi-sec-fingerprint-v2',face:'flosi-sec-face-v2',auto:'flosi-sec-autolock-v2',shot:'flosi-sec-screenshot-v2',
+ pinHash:'flosi-sec-pin-hash-v4',pinSalt:'flosi-sec-pin-salt-v4',pinSession:'flosi-sec-pin-session-v4',background:'flosi-sec-background-v4'
 };
-
-function toast(msg){
- if(typeof window.toast==='function'){window.toast(msg);return}
- const t=document.getElementById('toast');if(!t)return;
- t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)
-}
+function toast(msg){if(typeof window.toast==='function'){window.toast(msg);return}const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 function bool(key){return localStorage.getItem(key)==='1'}
 function setBool(key,v){localStorage.setItem(key,v?'1':'0')}
+function hasPin(){return Boolean(localStorage.getItem(K.pinHash)&&localStorage.getItem(K.pinSalt))}
 function autoValue(){return localStorage.getItem(K.auto)||'60'}
+function cleanLegacy(){['flosi-sec-password-v2','flosi-security-password','flosi-security-passcode','flosi-password','flosi-passcode','flosi-pin','flosi-security-pin'].forEach(k=>localStorage.removeItem(k));document.getElementById('secV2Modal')?.remove();document.getElementById('secV2Lock')?.remove();document.getElementById('flosiResetPasswordModal')?.remove()}
+function bytesToB64(bytes){let s='';bytes.forEach(b=>s+=String.fromCharCode(b));return btoa(s)}
+function b64ToBytes(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0))}
+async function derive(pin,salt){const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:120000,hash:'SHA-256'},key,256);return new Uint8Array(bits)}
+async function savePin(pin){if(!/^\d{6}$/.test(pin))throw new Error('PIN يجب أن يكون 6 أرقام');const salt=crypto.getRandomValues(new Uint8Array(16));const hash=await derive(pin,salt);localStorage.setItem(K.pinSalt,bytesToB64(salt));localStorage.setItem(K.pinHash,bytesToB64(hash));sessionStorage.setItem(K.pinSession,'1')}
+async function verifyPin(pin){if(!/^\d{6}$/.test(pin)||!hasPin())return false;const actual=await derive(pin,b64ToBytes(localStorage.getItem(K.pinSalt)));const expected=b64ToBytes(localStorage.getItem(K.pinHash));if(actual.length!==expected.length)return false;let diff=0;for(let i=0;i<actual.length;i++)diff|=actual[i]^expected[i];return diff===0}
+function clearPin(){localStorage.removeItem(K.pinHash);localStorage.removeItem(K.pinSalt);sessionStorage.removeItem(K.pinSession);document.getElementById('secV4Lock')?.remove()}
 
-function clearPasswordData(){
- [
-  'flosi-sec-password-v2','flosi-security-password','flosi-security-passcode',
-  'flosi-password','flosi-passcode','flosi-pin','flosi-security-pin'
- ].forEach(k=>localStorage.removeItem(k));
- document.getElementById('secV2Modal')?.remove();
- document.getElementById('secV2Lock')?.remove();
- document.getElementById('flosiResetPasswordModal')?.remove();
-}
+function ensureStyle(){if(document.getElementById('flosiSecurityV4Style'))return;const s=document.createElement('style');s.id='flosiSecurityV4Style';s.textContent=`
+#security[data-security-v4]{padding-bottom:28px}.secV4Hero{background:linear-gradient(145deg,#17131f,#30213f);color:#fff;border-radius:28px;padding:19px;box-shadow:0 18px 38px rgba(36,27,51,.18);margin-bottom:15px}.secV4HeroTop{display:flex;align-items:center;gap:12px}.secV4Shield{width:50px;height:50px;border-radius:16px;background:linear-gradient(145deg,#9b62ff,#7138eb);display:grid;place-items:center;font-size:22px;flex:0 0 50px}.secV4HeroCopy{flex:1}.secV4HeroCopy small{display:block;color:#c8c0d1;font-size:9px}.secV4HeroCopy b{display:block;font-size:18px;margin-top:2px}.secV4Score{padding:6px 10px;border:1px solid #ffffff18;background:#ffffff0f;border-radius:999px;font-size:8px;white-space:nowrap}.secV4Group{margin:15px 0 8px;font-size:11px;font-weight:700;color:#4d4657;padding-inline:3px}.secV4Card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:4px 14px;box-shadow:var(--shadow);overflow:hidden}.secV4Row{display:flex;align-items:center;gap:11px;min-height:74px;padding:10px 0}.secV4Row+.secV4Row{border-top:1px solid var(--line)}.secV4Icon{width:42px;height:42px;border-radius:14px;background:#f4efff;color:var(--p);display:grid;place-items:center;flex:0 0 42px;font-size:17px}.secV4Copy{flex:1;min-width:0}.secV4Copy b{display:block;font-size:11px}.secV4Copy small{display:block;color:var(--muted);font-size:9px;line-height:1.65;margin-top:2px}.secV4Switch{width:43px;height:25px;accent-color:var(--p);flex:0 0 auto}.secV4Select{height:40px;min-width:122px;border:1px solid #e4daf4;background:#faf8fd;border-radius:12px;padding:0 9px;color:var(--text);font-size:9px;outline:0}.secV4Mini{height:34px;border:0;border-radius:10px;background:#f2ebff;color:var(--p);font-size:8px;font-weight:700;padding:0 10px;white-space:nowrap}.secV4Note{margin-top:14px;padding:12px 13px;border-radius:16px;background:#f7f3ff;border:1px solid #eadfff;color:#67577c;font-size:9px;line-height:1.8}.secV4Modal,.secV4Lock{position:fixed;inset:0;z-index:280;background:rgba(20,14,29,.62);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(12px)}.secV4Sheet{width:min(100%,430px);background:#fff;border-radius:26px;padding:20px;box-shadow:0 28px 70px rgba(25,16,38,.30)}.secV4Sheet h3{font-size:18px;margin:0 0 5px}.secV4Sheet p{font-size:9px;color:var(--muted);line-height:1.75;margin:0 0 14px}.secV4Pin{width:100%;height:52px;border:1px solid #e4daf4;background:#faf8fd;border-radius:15px;padding:0 14px;text-align:center;letter-spacing:8px;font-size:18px;outline:0;direction:ltr}.secV4Pin:focus{border-color:#aa7cff;box-shadow:0 0 0 4px #7b44ef12}.secV4Actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}.secV4Actions button{height:44px;border:0;border-radius:13px;font-size:10px;font-weight:700}.secV4Primary{background:linear-gradient(145deg,#955bff,#7138eb);color:#fff}.secV4Secondary{background:#f1eef6;color:#615a69}.secV4Danger{width:100%;height:42px;border:0;border-radius:13px;background:#fff1f3;color:var(--red);font-size:9px;font-weight:700;margin-top:9px}.secV4Lock .secV4Sheet{text-align:center}.secV4LockIcon{width:58px;height:58px;border-radius:18px;background:#f2ebff;color:var(--p);display:grid;place-items:center;margin:0 auto 14px;font-size:25px}.secV4Error{font-size:9px;color:var(--red);margin-top:8px;min-height:14px}@media(max-width:520px){.secV4Row{min-height:78px}.secV4Select{min-width:108px}.secV4Hero{border-radius:24px}}
+`;document.head.appendChild(s)}
+function score(){let n=0;if(hasPin())n+=20;if(bool(K.finger))n+=20;if(bool(K.face))n+=20;if(autoValue()!=='never')n+=20;if(bool(K.shot))n+=20;return n}
+function securityLabel(s){return s>=80?'قوي':s>=60?'جيد':s>=40?'متوسط':'اختياري'}
 
-function ensureStyle(){
- if(document.getElementById('flosiSecurityV3Style'))return;
- const s=document.createElement('style');s.id='flosiSecurityV3Style';s.textContent=`
- #security[data-security-v3]{padding-bottom:24px}.secV3Hero{background:linear-gradient(145deg,#17131f,#30213f);color:#fff;border-radius:26px;padding:18px;box-shadow:0 18px 38px rgba(36,27,51,.18);margin-bottom:12px}.secV3HeroTop{display:flex;align-items:center;gap:12px}.secV3Shield{width:48px;height:48px;border-radius:16px;background:linear-gradient(145deg,#9b62ff,#7138eb);display:grid;place-items:center;font-size:22px}.secV3HeroCopy{flex:1}.secV3HeroCopy small{display:block;color:#c8c0d1;font-size:9px}.secV3HeroCopy b{display:block;font-size:17px;margin-top:2px}.secV3Score{padding:6px 9px;border:1px solid #ffffff18;background:#ffffff0f;border-radius:999px;font-size:8px}.secV3List{display:grid;gap:10px}.secV3Card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:13px 14px;box-shadow:var(--shadow)}.secV3Row{display:flex;align-items:center;gap:11px}.secV3Icon{width:42px;height:42px;border-radius:14px;background:#f4efff;color:var(--p);display:grid;place-items:center;flex:0 0 42px;font-size:18px}.secV3Copy{flex:1;min-width:0}.secV3Copy b{display:block;font-size:11px}.secV3Copy small{display:block;color:var(--muted);font-size:9px;line-height:1.6;margin-top:2px}.secV3Switch{width:43px;height:25px;accent-color:var(--p)}.secV3Select{height:39px;min-width:118px;border:1px solid #e4daf4;background:#faf8fd;border-radius:11px;padding:0 9px;color:var(--text);font-size:9px;outline:0}.secV3Note{margin-top:12px;padding:11px 12px;border-radius:15px;background:#f7f3ff;border:1px solid #eadfff;color:#67577c;font-size:9px;line-height:1.8}
- `;document.head.appendChild(s)
-}
+function openPinSetup(){document.getElementById('secV4PinModal')?.remove();const m=document.createElement('div');m.id='secV4PinModal';m.className='secV4Modal';m.innerHTML=`<div class="secV4Sheet"><h3>${hasPin()?'تغيير PIN':'تفعيل PIN'}</h3><p>أدخل 6 أرقام فقط. هذا الخيار اختياري ويمكنك إيقافه لاحقاً.</p><input class="secV4Pin" id="secV4Pin1" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="••••••"><div style="height:9px"></div><input class="secV4Pin" id="secV4Pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="••••••"><div class="secV4Error" id="secV4PinError"></div><div class="secV4Actions"><button class="secV4Primary" id="secV4PinSave">حفظ</button><button class="secV4Secondary" id="secV4PinCancel">إلغاء</button></div>${hasPin()?'<button class="secV4Danger" id="secV4PinRemove">إيقاف PIN</button>':''}</div>`;document.body.appendChild(m);const a=m.querySelector('#secV4Pin1'),b=m.querySelector('#secV4Pin2'),err=m.querySelector('#secV4PinError');const clean=input=>input.value=input.value.replace(/\D/g,'').slice(0,6);a.oninput=()=>clean(a);b.oninput=()=>clean(b);m.querySelector('#secV4PinCancel').onclick=()=>m.remove();m.onclick=e=>{if(e.target===m)m.remove()};m.querySelector('#secV4PinSave').onclick=async()=>{clean(a);clean(b);if(a.value.length!==6){err.textContent='PIN يجب أن يكون 6 أرقام';return}if(a.value!==b.value){err.textContent='الرمزان غير متطابقين';return}try{await savePin(a.value);m.remove();toast('تم تفعيل PIN');render()}catch(e){err.textContent=e.message||'تعذر حفظ PIN'}};m.querySelector('#secV4PinRemove')?.addEventListener('click',()=>{clearPin();m.remove();toast('تم إيقاف PIN');render()});setTimeout(()=>a.focus(),50)}
 
-function score(){
- let n=0;
- if(bool(K.finger))n+=25;
- if(bool(K.face))n+=25;
- if(autoValue()!=='never')n+=25;
- if(bool(K.shot))n+=25;
- return n
-}
+function render(){const sec=document.getElementById('security');if(!sec)return;cleanLegacy();ensureStyle();sec.setAttribute('data-security-v4','');sec.removeAttribute('data-security-v3');sec.removeAttribute('data-security-v2');const s=score();sec.innerHTML=`<div class="head"><div class="headCopy"><div class="eyebrow">الخصوصية والأمان</div><h1 class="title">أمان Flosi</h1><div class="sub">خيارات مرتبة لحماية الدخول والبيانات</div></div><button class="round" data-go="me">←</button></div>
+<div class="secV4Hero"><div class="secV4HeroTop"><div class="secV4Shield">⌾</div><div class="secV4HeroCopy"><small>مستوى الحماية</small><b>${s}% محمي</b></div><span class="secV4Score">${securityLabel(s)}</span></div></div>
+<div class="secV4Group">فتح التطبيق</div><div class="secV4Card">
+<div class="secV4Row"><div class="secV4Icon">#</div><div class="secV4Copy"><b>PIN من 6 أرقام</b><small>${hasPin()?'مفعّل — يمكنك تغييره أو إيقافه':'اختياري — فعّله إذا تريد قفل رقمي سريع'}</small></div><button class="secV4Mini" id="secV4PinBtn">${hasPin()?'تغيير':'تفعيل'}</button></div>
+<div class="secV4Row"><div class="secV4Icon">◉</div><div class="secV4Copy"><b>بصمة الإصبع</b><small>اختيارية وتستخدم البصمة المسجلة في جهاز Android.</small></div><input class="secV4Switch" id="secV4Finger" type="checkbox" ${bool(K.finger)?'checked':''}></div>
+<div class="secV4Row"><div class="secV4Icon">◎</div><div class="secV4Copy"><b>بصمة الوجه</b><small>اختيارية إذا كان جهاز Android يدعم التحقق بالوجه.</small></div><input class="secV4Switch" id="secV4Face" type="checkbox" ${bool(K.face)?'checked':''}></div></div>
+<div class="secV4Group">القفل والخصوصية</div><div class="secV4Card">
+<div class="secV4Row"><div class="secV4Icon">◷</div><div class="secV4Copy"><b>القفل التلقائي</b><small>حدد متى يقفل Flosi بعد مغادرة التطبيق.</small></div><select class="secV4Select" id="secV4Auto"><option value="0">فوراً</option><option value="30">بعد 30 ثانية</option><option value="60">بعد دقيقة</option><option value="300">بعد 5 دقائق</option><option value="900">بعد 15 دقيقة</option><option value="never">بدون قفل تلقائي</option></select></div>
+<div class="secV4Row"><div class="secV4Icon">▣</div><div class="secV4Copy"><b>حماية لقطة الشاشة</b><small>في Android تمنع تصوير الشاشة وظهور البيانات في التطبيقات الأخيرة.</small></div><input class="secV4Switch" id="secV4Shot" type="checkbox" ${bool(K.shot)?'checked':''}></div></div>
+<div class="secV4Note">كل خيارات القفل اختيارية. PIN يتكون من 6 أرقام فقط ولا يُحفظ كنص صريح. البصمة والوجه يعتمدان على إعدادات جهاز Android.</div>`;
+const auto=sec.querySelector('#secV4Auto');auto.value=autoValue();sec.querySelector('#secV4PinBtn').onclick=openPinSetup;sec.querySelector('#secV4Finger').onchange=e=>{setBool(K.finger,e.target.checked);toast(e.target.checked?'تم تفعيل بصمة الإصبع':'تم إيقاف بصمة الإصبع');render()};sec.querySelector('#secV4Face').onchange=e=>{setBool(K.face,e.target.checked);toast(e.target.checked?'تم تفعيل بصمة الوجه':'تم إيقاف بصمة الوجه');render()};auto.onchange=e=>{localStorage.setItem(K.auto,e.target.value);toast('تم حفظ القفل التلقائي');render()};sec.querySelector('#secV4Shot').onchange=e=>{setBool(K.shot,e.target.checked);toast(e.target.checked?'تم تفعيل حماية الشاشة':'تم إيقاف حماية الشاشة');render()};if(typeof window.FLOSI_LATINIZE_DIGITS==='function')window.FLOSI_LATINIZE_DIGITS()}
 
-function render(){
- const sec=document.getElementById('security');if(!sec)return;
- clearPasswordData();ensureStyle();sec.setAttribute('data-security-v3','');sec.removeAttribute('data-security-v2');
- const s=score();
- sec.innerHTML=`<div class="head"><div class="headCopy"><div class="eyebrow">الخصوصية والأمان</div><h1 class="title">أمان Flosi</h1><div class="sub">تحكم بطرق الدخول وحماية بياناتك المالية</div></div><button class="round" data-go="me">←</button></div>
- <div class="secV3Hero"><div class="secV3HeroTop"><div class="secV3Shield">⌾</div><div class="secV3HeroCopy"><small>مستوى الحماية</small><b>${s}% محمي</b></div><span class="secV3Score">${s>=75?'قوي':s>=50?'جيد':'يحتاج إعداد'}</span></div></div>
- <div class="secV3List">
-  <div class="secV3Card"><div class="secV3Row"><div class="secV3Icon">◉</div><div class="secV3Copy"><b>بصمة الإصبع</b><small>استخدم بصمة الإصبع المسجلة في جهاز Android لفتح Flosi.</small></div><input class="secV3Switch" id="secV3Finger" type="checkbox" ${bool(K.finger)?'checked':''}></div></div>
-  <div class="secV3Card"><div class="secV3Row"><div class="secV3Icon">◎</div><div class="secV3Copy"><b>بصمة الوجه</b><small>استخدم التحقق بالوجه إذا كان جهاز Android يدعمه ومُعداً من النظام.</small></div><input class="secV3Switch" id="secV3Face" type="checkbox" ${bool(K.face)?'checked':''}></div></div>
-  <div class="secV3Card"><div class="secV3Row"><div class="secV3Icon">◷</div><div class="secV3Copy"><b>القفل التلقائي</b><small>حدد متى يقفل Flosi بعد مغادرة التطبيق أو الخمول.</small></div><select class="secV3Select" id="secV3Auto"><option value="0">فوراً</option><option value="30">بعد 30 ثانية</option><option value="60">بعد دقيقة</option><option value="300">بعد 5 دقائق</option><option value="900">بعد 15 دقيقة</option><option value="never">لا يقفل تلقائياً</option></select></div></div>
-  <div class="secV3Card"><div class="secV3Row"><div class="secV3Icon">▣</div><div class="secV3Copy"><b>حماية لقطة الشاشة</b><small>في تطبيق Android تمنع تصوير الشاشة وظهور البيانات الحساسة في التطبيقات الأخيرة.</small></div><input class="secV3Switch" id="secV3Shot" type="checkbox" ${bool(K.shot)?'checked':''}></div></div>
- </div>
- <div class="secV3Note">تم إلغاء كلمة المرور من Flosi. التحقق الحيوي يعتمد على البصمة أو الوجه المسجلين في نظام الجهاز، والقفل التلقائي يعمل معها في تطبيق Android.</div>`;
- const auto=sec.querySelector('#secV3Auto');auto.value=autoValue();
- sec.querySelector('#secV3Finger').onchange=e=>{setBool(K.finger,e.target.checked);toast(e.target.checked?'تم تفعيل بصمة الإصبع':'تم إيقاف بصمة الإصبع');render()};
- sec.querySelector('#secV3Face').onchange=e=>{setBool(K.face,e.target.checked);toast(e.target.checked?'تم تفعيل بصمة الوجه':'تم إيقاف بصمة الوجه');render()};
- auto.onchange=e=>{localStorage.setItem(K.auto,e.target.value);toast('تم حفظ إعداد القفل التلقائي');render()};
- sec.querySelector('#secV3Shot').onchange=e=>{setBool(K.shot,e.target.checked);toast(e.target.checked?'تم تفعيل حماية لقطة الشاشة':'تم إيقاف حماية لقطة الشاشة');render()};
- if(typeof window.FLOSI_LATINIZE_DIGITS==='function')window.FLOSI_LATINIZE_DIGITS();
-}
+function showPinLock(){if(!hasPin()||sessionStorage.getItem(K.pinSession)==='1'||document.getElementById('secV4Lock'))return;const m=document.createElement('div');m.id='secV4Lock';m.className='secV4Lock';m.innerHTML=`<div class="secV4Sheet"><div class="secV4LockIcon">◆</div><h3>Flosi مقفول</h3><p>أدخل PIN المكوّن من 6 أرقام</p><input class="secV4Pin" id="secV4UnlockPin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••"><div class="secV4Error" id="secV4UnlockError"></div><button class="secV4Primary" id="secV4UnlockBtn" style="width:100%;height:46px;border:0;border-radius:14px;font-weight:700">فتح</button></div>`;document.body.appendChild(m);const input=m.querySelector('#secV4UnlockPin'),err=m.querySelector('#secV4UnlockError'),btn=m.querySelector('#secV4UnlockBtn');input.oninput=()=>input.value=input.value.replace(/\D/g,'').slice(0,6);const unlock=async()=>{if(await verifyPin(input.value)){sessionStorage.setItem(K.pinSession,'1');m.remove()}else{err.textContent='PIN غير صحيح';input.select()}};btn.onclick=unlock;input.onkeydown=e=>{if(e.key==='Enter')unlock()};setTimeout(()=>input.focus(),50)}
+function checkInitialLock(){if(hasPin()&&sessionStorage.getItem(K.pinSession)!=='1')showPinLock()}
+function bindPrivacy(){window.addEventListener('blur',()=>{if(bool(K.shot))document.documentElement.style.filter='blur(8px)'});window.addEventListener('focus',()=>{document.documentElement.style.filter=''});document.addEventListener('visibilitychange',()=>{if(document.hidden){localStorage.setItem(K.background,String(Date.now()));return}const mode=autoValue();if(!hasPin()||mode==='never')return;const left=Number(localStorage.getItem(K.background)||Date.now()),seconds=mode==='0'?0:Number(mode);if(Date.now()-left>=seconds*1000){sessionStorage.removeItem(K.pinSession);showPinLock()}})}
 
-function bindScreenshotPreview(){
- window.addEventListener('blur',()=>{if(bool(K.shot))document.documentElement.style.filter='blur(8px)'});
- window.addEventListener('focus',()=>{document.documentElement.style.filter=''});
-}
-
-clearPasswordData();render();bindScreenshotPreview();
-setTimeout(render,220);
+cleanLegacy();render();bindPrivacy();setTimeout(()=>{render();checkInitialLock()},180);
 })();
