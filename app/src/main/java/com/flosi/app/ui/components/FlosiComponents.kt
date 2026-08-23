@@ -3,8 +3,10 @@ package com.flosi.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -17,10 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.flosi.app.i18n.localizedLegacyText
+import java.math.BigInteger
 import java.text.NumberFormat
 import java.util.Currency
 import java.util.Locale
-import kotlin.math.abs
 
 val FlosiPurple = Color(0xFF8A5CF6)
 val FlosiPurpleDeep = Color(0xFF6E3EE8)
@@ -59,7 +61,11 @@ fun FlosiPage(title: String, subtitle: String = "", onBack: (() -> Unit)? = null
                 }
             }
         }
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp).padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
     }
 }
 
@@ -80,8 +86,9 @@ fun Metric(label: String, value: String, tone: Color = FlosiText) {
 }
 
 @Composable
-fun ActionRow(title: String, subtitle: String = "", value: String? = null, accent: Color = FlosiPurple, onClick: () -> Unit = {}) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+fun ActionRow(title: String, subtitle: String = "", value: String? = null, accent: Color = FlosiPurple, onClick: (() -> Unit)? = null) {
+    val rowModifier=if(onClick!=null) Modifier.fillMaxWidth().clickable(onClick=onClick).padding(vertical=8.dp) else Modifier.fillMaxWidth().padding(vertical=8.dp)
+    Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(38.dp).background(accent.copy(alpha = .11f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
             Box(Modifier.size(9.dp).background(accent, CircleShape))
         }
@@ -102,15 +109,19 @@ fun SectionTitle(title: String, action: String? = null, onAction: () -> Unit = {
     }
 }
 
+private fun magnitudeText(value:Long):String = if(value==Long.MIN_VALUE) BigInteger.valueOf(value).abs().toString() else kotlin.math.abs(value).toString()
+
 fun moneyText(value: Long, currencyCode: String = "IQD"): String {
     val code = currencyCode.trim().uppercase()
+    if(value==Long.MIN_VALUE) return "${magnitudeText(value)} $code"
+    val magnitude=kotlin.math.abs(value)
     return runCatching {
         val format = NumberFormat.getCurrencyInstance(Locale.getDefault())
         format.currency = Currency.getInstance(code)
         format.maximumFractionDigits = if (code in setOf("IQD","JPY","KRW")) 0 else 2
         format.minimumFractionDigits = 0
-        format.format(abs(value))
-    }.getOrElse { "%,d %s".format(Locale.getDefault(), abs(value), code) }
+        format.format(magnitude)
+    }.getOrElse { "%,d %s".format(Locale.getDefault(), magnitude, code) }
 }
 
 fun signedMoney(value: Long, currencyCode: String = "IQD"): String = (if (value >= 0) "+" else "−") + moneyText(value,currencyCode)
