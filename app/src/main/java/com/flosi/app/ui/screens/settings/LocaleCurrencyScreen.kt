@@ -3,6 +3,7 @@ package com.flosi.app.ui.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
@@ -23,6 +24,7 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
  var rateText by remember{mutableStateOf("")}
  var message by remember{mutableStateOf("")}
  var languageMenu by remember{mutableStateOf(false)}
+ var currencyMenu by remember{mutableStateOf(false)}
  val selectedLocale=FlosiLocales.get(state.language)
  val doneText=flosiText("done")
 
@@ -31,7 +33,9 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
    Text(flosiText("choose_language"))
    Box(Modifier.fillMaxWidth()){
     OutlinedButton(onClick={languageMenu=true},modifier=Modifier.fillMaxWidth()){
-     Text("${selectedLocale.label}  •  ${selectedLocale.localeTag}")
+     Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){
+      Text(selectedLocale.label)
+     }
     }
     DropdownMenu(expanded=languageMenu,onDismissRequest={languageMenu=false}){
      FlosiLocales.all.forEach{locale->
@@ -48,7 +52,22 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
 
   CardBox{
    Text(flosiText("base_currency"))
-   currencies.chunked(5).forEach{row->Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach{v->FilterChip(state.currency==v,{scope.launch{prefs.setCurrency(v)}},{Text(v)})}}}
+   Box(Modifier.fillMaxWidth()){
+    OutlinedButton(onClick={currencyMenu=true},modifier=Modifier.fillMaxWidth()){
+     Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){
+      Text(state.currency)
+     }
+    }
+    DropdownMenu(expanded=currencyMenu,onDismissRequest={currencyMenu=false}){
+     currencies.forEach{currency->
+      DropdownMenuItem(
+       text={Text(currency)},
+       onClick={currencyMenu=false;scope.launch{prefs.setCurrency(currency)}},
+       trailingIcon={if(state.currency==currency){Text("✓",color=FlosiPurple)}}
+      )
+     }
+    }
+   }
   }
 
   CardBox{
