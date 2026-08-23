@@ -10,8 +10,14 @@ import java.util.Locale
 import java.util.TimeZone
 
 object CsvExporter {
+    internal fun safeSpreadsheetText(value:Any?):String {
+        val raw=value?.toString().orEmpty()
+        val trimmed=raw.trimStart()
+        return if(trimmed.firstOrNull() in setOf('=','+','-','@','\t','\r')) "'$raw" else raw
+    }
+
     private fun csv(value:Any?):String =
-        "\"${value?.toString().orEmpty().replace("\"","\"\"")}\""
+        "\"${safeSpreadsheetText(value).replace("\"","\"\"")}\""
 
     fun exportTransactions(context:Context,uri:Uri,items:List<TransactionWithNames>){
         val iso=SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
