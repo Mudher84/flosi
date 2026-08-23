@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
+import com.flosi.app.i18n.FlosiLocales
 import com.flosi.app.settings.FlosiPreferencesState
 import com.flosi.app.ui.components.*
 import com.flosi.app.ui.viewmodel.rememberFlosiPreferences
@@ -20,11 +21,31 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
  var rateCurrency by remember(state.currency){mutableStateOf(currencies.firstOrNull{it!=state.currency}?:"USD")}
  var rateText by remember{mutableStateOf("")}
  var message by remember{mutableStateOf("")}
+ var languageMenu by remember{mutableStateOf(false)}
+ val selectedLocale=FlosiLocales.get(state.language)
 
  FlosiPage("العملة واللغة","إعدادات محفوظة ومحرك تحويل واضح",onBack){
   CardBox{
-   Text("اللغة")
-   Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){listOf("ar" to "العربية","en" to "English").forEach{(v,l)->FilterChip(state.language==v,{scope.launch{prefs.setLanguage(v)}},{Text(l)})}}
+   Text("لغة التطبيق")
+   Text("تغيير اللغة يطبق اتجاه RTL/LTR على التطبيق كله فوراً.",color=FlosiMuted)
+   Box(Modifier.fillMaxWidth()){
+    OutlinedButton(onClick={languageMenu=true},modifier=Modifier.fillMaxWidth()){
+     Text("${selectedLocale.label}  •  ${selectedLocale.localeTag}")
+    }
+    DropdownMenu(expanded=languageMenu,onDismissRequest={languageMenu=false}){
+     FlosiLocales.all.forEach{locale->
+      DropdownMenuItem(
+       text={Text(locale.label)},
+       onClick={
+        languageMenu=false
+        scope.launch{prefs.setLanguage(locale.code)}
+       },
+       trailingIcon={if(state.language==locale.code){Text("✓",color=FlosiPurple)}}
+      )
+     }
+    }
+   }
+   Text("اللغات المتاحة: ${FlosiLocales.all.size}",color=FlosiMuted)
   }
 
   CardBox{
