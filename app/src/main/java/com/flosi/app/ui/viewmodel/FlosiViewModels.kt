@@ -99,10 +99,11 @@ class TransactionsViewModel(private val repo: FinanceRepository): ViewModel() {
 
 class PeopleViewModel(private val repo: FinanceRepository): ViewModel() {
     val people = repo.people.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
-    fun add(name:String,phone:String,balance:Long,onDone:(String?)->Unit={})=viewModelScope.launch {
+    val preferences=repo.preferenceState.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),FlosiPreferencesState())
+    fun add(name:String,phone:String,balance:Long,currency:String,onDone:(String?)->Unit={})=viewModelScope.launch {
         val error=runCatching{
             require(name.isNotBlank()){ "الاسم مطلوب" }
-            repo.addPerson(PersonEntity(name=name.trim(),phone=phone.trim(),openingBalance=balance,currentBalance=balance))
+            repo.addPerson(PersonEntity(name=name.trim(),phone=phone.trim(),currency=currency,openingBalance=balance,currentBalance=balance))
         }.exceptionOrNull()?.message
         onDone(error)
     }
