@@ -24,11 +24,12 @@ fun BackupManagerScreen(onBack:()->Unit){
 
     FlosiPage(s("إدارة النسخ الاحتياطية","Manage backups"),s("نسخ مشفرة مع فحص سلامة قبل الاسترجاع","Encrypted backups with integrity checks before restore"),onBack){
         OutlinedTextField(password,{password=it;status=""},Modifier.fillMaxWidth(),label={Text(s("كلمة مرور النسخة","Backup password"))},visualTransformation=PasswordVisualTransformation(),singleLine=true)
-        Text(s("استخدم 4 أحرف/أرقام أو أكثر، ولا تنسَها؛ بدونها لا يمكن فك النسخة.","Use at least 4 characters and keep the password safe; the backup cannot be decrypted without it."),color=FlosiMuted)
-        Button(onClick={createBackup.launch("flosi-backup.flosi")},enabled=password.length>=4,modifier=Modifier.fillMaxWidth()){Text(s("إنشاء نسخة مشفرة","Create encrypted backup"))}
-        OutlinedButton(onClick={restoreBackup.launch(arrayOf("application/octet-stream","*/*"))},enabled=password.length>=4,modifier=Modifier.fillMaxWidth()){Text(s("فحص واسترجاع نسخة","Verify and restore backup"))}
+        Text(s("النسخة الجديدة تحتاج 8 أحرف/أرقام أو أكثر. لاسترجاع نسخ Flosi القديمة ما زال التطبيق يقبل كلمات المرور القديمة من 4 أحرف فأكثر.","New backups require at least 8 characters. Existing legacy Flosi backups can still be restored with their original 4+ character password."),color=FlosiMuted)
+        Button(onClick={createBackup.launch("flosi-backup.flosi")},enabled=password.length>=EncryptedBackupService.NEW_BACKUP_MIN_PASSWORD,modifier=Modifier.fillMaxWidth()){Text(s("إنشاء نسخة مشفرة","Create encrypted backup"))}
+        OutlinedButton(onClick={restoreBackup.launch(arrayOf("application/octet-stream","*/*"))},enabled=password.length>=EncryptedBackupService.LEGACY_RESTORE_MIN_PASSWORD,modifier=Modifier.fillMaxWidth()){Text(s("فحص واسترجاع نسخة","Verify and restore backup"))}
         if(status.isNotBlank())CardBox{Text(status,color=if(success)FlosiGreen else FlosiRed)}
         CardBox{Text(s("قبل استبدال بياناتك، Flosi يتحقق من ترويسة SQLite، سلامة quick_check، وجود جداول التطبيق الأساسية، وحدود أحجام الملف. الاستبدال يتم بملف مؤقت مع رجوع للنسخة السابقة إذا فشل التثبيت.","Before replacing data, Flosi verifies the SQLite header, quick_check integrity, required app tables, and file-size limits. Restore uses a temporary file and rolls back if installation fails."),color=FlosiMuted)}
+        CardBox{Text(s("هذه النسخة تحفظ قاعدة بياناتك المالية. إعدادات الجهاز الحساسة مثل PIN والبصمة لا تُنسخ لأسباب أمنية.","This backup stores your financial database. Device-sensitive settings such as PIN and biometrics are intentionally not copied for security."),color=FlosiMuted)}
         CardBox{Text(s("من نافذة اختيار الملف تقدر تختار Google Drive مباشرة؛ ما يحتاج OAuth خاص للتخزين اليدوي عبر Android.","Google Drive can be chosen directly from Android's file picker; manual storage does not require separate OAuth."),color=FlosiMuted)}
     }
 }
