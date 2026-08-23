@@ -4,11 +4,11 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.biometric.BiometricManager
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -32,7 +32,7 @@ fun SecurityCenterScreen(
 
     val biometricStatus = AppSecurity.biometricStatus(context)
     val biometricAvailable = biometricStatus == BiometricManager.BIOMETRIC_SUCCESS
-    val activeLayers = listOf(hasPin, biometric, secureScreen, autoLock >= 0).count { it }
+    val activeLayers = listOf(hasPin, biometric, secureScreen).count { it }
 
     FlosiPage("الأمان", "حماية حقيقية وفشل مغلق", onBack) {
         CardBox {
