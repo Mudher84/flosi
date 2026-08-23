@@ -103,7 +103,7 @@ interface TransactionDao {
         JOIN accounts a ON a.id=t.accountId
         LEFT JOIN people p ON p.id=t.personId
         LEFT JOIN categories c ON c.id=t.categoryId
-        WHERE t.id=:id LIMIT 1
+        WHERE t.id=:id AND t.deleted=0 LIMIT 1
     """)
     fun observeDetailed(id: Long): Flow<TransactionWithNames?>
 
