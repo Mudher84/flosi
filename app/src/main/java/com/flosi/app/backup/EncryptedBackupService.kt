@@ -22,6 +22,8 @@ object EncryptedBackupService {
     private const val SALT_SIZE=16
     private const val IV_SIZE=12
     private const val MAX_DATABASE_BYTES=512*1024*1024
+    const val NEW_BACKUP_MIN_PASSWORD=8
+    const val LEGACY_RESTORE_MIN_PASSWORD=4
 
     private val requiredTables=setOf(
         "accounts","people","categories","transactions","commitments",
@@ -40,7 +42,7 @@ object EncryptedBackupService {
     }
 
     fun backup(context:Context,db:FlosiDatabase,destination:Uri,password:CharArray) {
-        require(password.size>=4){"كلمة مرور النسخة قصيرة"}
+        require(password.size>=NEW_BACKUP_MIN_PASSWORD){"كلمة مرور النسخة الجديدة يجب أن تكون 8 أحرف/أرقام على الأقل"}
         var plain:ByteArray?=null
         try {
             db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").close()
@@ -80,7 +82,7 @@ object EncryptedBackupService {
     }
 
     fun restoreToTemp(context:Context,source:Uri,password:CharArray):ByteArray {
-        require(password.size>=4){"كلمة مرور النسخة قصيرة"}
+        require(password.size>=LEGACY_RESTORE_MIN_PASSWORD){"كلمة مرور النسخة قصيرة"}
         try {
             val plain=context.contentResolver.openInputStream(source)?.use { input ->
                 DataInputStream(input).use { d ->
