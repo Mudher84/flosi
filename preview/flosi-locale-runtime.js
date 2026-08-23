@@ -4,7 +4,8 @@ if(window.__FLOSI_LOCALE_RUNTIME__) return;
 window.__FLOSI_LOCALE_RUNTIME__=true;
 
 const I18N=window.FLOSI_I18N||{};
-const SOURCE_CURRENCY='USD';
+const LEGACY_SOURCE_CURRENCY='USD';
+const PREVIEW_SOURCE_KEY='flosi-preview-source-currency-v1';
 const localeMeta=window.localeMeta||{
   ar:{label:'العربية',locale:'ar-IQ',dir:'rtl'},en:{label:'English',locale:'en-US',dir:'ltr'},
   'zh-CN':{label:'简体中文',locale:'zh-CN',dir:'ltr'},es:{label:'Español',locale:'es-ES',dir:'ltr'},
@@ -35,16 +36,17 @@ const manual={ar:{
 
 function committedState(){
   const lang=localStorage.getItem('flosi-lang')||'ar';
-  const currency=localStorage.getItem('flosi-currency')||'IQD';
+  const currency=(localStorage.getItem('flosi-currency')||'IQD').toUpperCase();
   const meta=localeMeta[lang]||localeMeta.ar;
   return {lang,currency,meta};
 }
 function state(){
   const committed=committedState();
   const lang=localStorage.getItem('flosi-lang-preview')||committed.lang;
-  const currency=localStorage.getItem('flosi-currency-preview')||committed.currency;
+  const currency=(localStorage.getItem('flosi-currency-preview')||committed.currency).toUpperCase();
   return {lang,currency,meta:localeMeta[lang]||localeMeta.ar};
 }
+function sourceCurrency(){return (localStorage.getItem(PREVIEW_SOURCE_KEY)||committedState().currency||'IQD').toUpperCase()}
 function safeNumber(raw){
   const n=Number(String(raw).replace(/,/g,'').replace(/\s/g,''));
   return Number.isFinite(n)?n:null;
@@ -54,12 +56,14 @@ function money(n,currency,locale){
   try{return new Intl.NumberFormat(locale,{style:'currency',currency,maximumFractionDigits:fractionDigits(currency)}).format(n)}
   catch(_){return `${Number(n).toLocaleString(locale)} ${currency}`}
 }
-function rateKey(currency){return `flosi-fx-${SOURCE_CURRENCY}-${String(currency).toUpperCase()}`}
+function rateKey(from,to){return `flosi-fx-${String(from).toUpperCase()}-${String(to).toUpperCase()}`}
 function getRate(currency){
-  const target=String(currency||'').toUpperCase();
-  if(target===SOURCE_CURRENCY)return 1;
-  const n=Number(localStorage.getItem(rateKey(target))||'');
-  return Number.isFinite(n)&&n>0?n:null;
+  const source=sourceCurrency(),target=String(currency||'').toUpperCase();
+  if(target===source)return 1;
+  const direct=Number(localStorage.getItem(rateKey(source,target))||'');
+  if(Number.isFinite(direct)&&direct>0)return direct;
+  const reverse=Number(localStorage.getItem(rateKey(target,source))||'');
+  return Number.isFinite(reverse)&&reverse>0?1/reverse:null;
 }
 function convertValue(value,currency){
   const rate=getRate(currency);
@@ -70,8 +74,9 @@ function formatConverted(value,currency,locale){
   return converted===null?null:money(converted,currency,locale);
 }
 function currencyText(text,currency,locale){
-  if(currency===SOURCE_CURRENCY)return text;
-  if(getRate(currency)===null)return text;
+  const source=sourceCurrency();
+  if(currency===source)return text;
+  if(source!==LEGACY_SOURCE_CURRENCY||getRate(currency)===null)return text;
   let out=text;
   out=out.replace(/([+−-]?\d[\d,]*(?:\.\d+)?)\s*\/\s*([+−-]?\d[\d,]*(?:\.\d+)?)\s+USD\b/g,(m,a,b)=>{
     const na=safeNumber(a.replace(/[+−-]/g,'')),nb=safeNumber(b.replace(/[+−-]/g,''));
@@ -114,6 +119,7 @@ function applyText(root=document.body){
 function signedBare(raw,currency,locale){
   const sign=raw.trim().startsWith('+')?'+':raw.trim().startsWith('−')||raw.trim().startsWith('-')?'−':'';
   const n=safeNumber(raw.replace(/[+−-]/g,''));if(n===null)return raw;
+  if(n===0)return sign+money(0,currency,locale);
   const out=formatConverted(n,currency,locale);return out===null?raw:sign+out;
 }
 function applyBareValues(){
@@ -123,18 +129,14 @@ function applyBareValues(){
     if(!originalBare.has(el))originalBare.set(el,el.textContent||'');
     const base=originalBare.get(el)||'';
     if(base.includes('%')){el.textContent=base;return}
-    el.textContent=currency===SOURCE_CURRENCY?base:signedBare(base,currency,meta.locale);
+    el.textContent=signedBare(base,currency,meta.locale);
   });
-  document.querySelectorAll('.goalText small').forEach(el=>{
-    if(!originalBare.has(el))originalBare.set(el,el.textContent||'');
-    const base=originalBare.get(el)||'';
-    if(/USD\b/.test(base)){el.textContent=currencyText(base,currency,meta.locale);return}
-    const pair=base.match(/([\d,.]+)\s*(?:من|\/)\s*([\d,.]+)/);
-    if(!pair||currency===SOURCE_CURRENCY){el.textContent=base;return}
-    const a=safeNumber(pair[1]),b=safeNumber(pair[2]);
-    const av=a===null?null:formatConverted(a,currency,meta.locale),bv=b===null?null:formatConverted(b,currency,meta.locale);
-    el.textContent=av&&bv?`${av} / ${bv}`:base;
-  });
+}
+function ensureCenteredSelectors(){
+  if(document.getElementById('flosiLocaleCentering'))return;
+  const style=document.createElement('style');style.id='flosiLocaleCentering';
+  style.textContent='#settingsLang,#settingsCurrency{text-align:center!important;text-align-last:center!important;padding-inline:52px!important}#settingsLang option,#settingsCurrency option{text-align:center!important}';
+  document.head.appendChild(style);
 }
 function ensureFxPanel(){
   const locale=document.getElementById('locale'),preview=document.querySelector('#locale .localePreview');if(!locale||!preview)return;
@@ -142,22 +144,23 @@ function ensureFxPanel(){
   if(!panel){
     panel=document.createElement('div');panel.id='previewFxPanel';panel.setAttribute('data-locale-no-transform','');
     panel.style.cssText='background:#fff;border:1px solid var(--line);border-radius:20px;padding:14px;box-shadow:var(--shadow);margin-top:12px';
-    panel.innerHTML='<div style="display:flex;gap:10px;align-items:flex-start"><div style="width:40px;height:40px;border-radius:13px;background:#fff6e7;color:var(--amber);display:grid;place-items:center;font-size:18px">⇄</div><div style="flex:1"><b style="display:block;font-size:11px">سعر تحويل نسخة العرض</b><small id="previewFxHelp" style="display:block;color:var(--muted);font-size:8px;line-height:1.7;margin-top:2px"></small></div></div><div id="previewFxInputs" style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:11px"><input id="previewFxRate" inputmode="decimal" placeholder="مثال: 1310" style="height:46px;border:1px solid #e4d9f7;border-radius:14px;padding:0 12px;outline:0"><button id="previewFxSave" style="border:0;border-radius:14px;background:var(--p);color:#fff;padding:0 15px;font-weight:700">حفظ السعر</button></div><small id="previewFxStatus" style="display:block;margin-top:8px;font-size:8px;color:var(--muted)"></small>';
+    panel.innerHTML='<div style="display:flex;gap:10px;align-items:flex-start"><div style="width:40px;height:40px;border-radius:13px;background:#fff6e7;color:var(--amber);display:grid;place-items:center;font-size:18px">⇄</div><div style="flex:1"><b style="display:block;font-size:11px">سعر تحويل نسخة العرض</b><small id="previewFxHelp" style="display:block;color:var(--muted);font-size:8px;line-height:1.7;margin-top:2px"></small></div></div><div id="previewFxInputs" style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:11px"><input id="previewFxRate" inputmode="decimal" style="height:46px;border:1px solid #e4d9f7;border-radius:14px;padding:0 12px;outline:0"><button id="previewFxSave" style="border:0;border-radius:14px;background:var(--p);color:#fff;padding:0 15px;font-weight:700">حفظ السعر</button></div><small id="previewFxStatus" style="display:block;margin-top:8px;font-size:8px;color:var(--muted)"></small>';
     preview.parentNode.insertBefore(panel,preview);
     panel.querySelector('#previewFxSave').addEventListener('click',()=>{
-      const {currency}=state();const input=panel.querySelector('#previewFxRate');const rate=Number(String(input.value||'').replace(',','.'));
-      if(currency===SOURCE_CURRENCY)return;
+      const {currency}=state(),source=sourceCurrency(),input=panel.querySelector('#previewFxRate');
+      const rate=Number(String(input.value||'').replace(',','.'));
+      if(currency===source)return;
       if(!Number.isFinite(rate)||rate<=0){panel.querySelector('#previewFxStatus').textContent='أدخل سعر صرف أكبر من صفر.';panel.querySelector('#previewFxStatus').style.color='var(--red)';return}
-      localStorage.setItem(rateKey(currency),String(rate));panel.querySelector('#previewFxStatus').textContent=`تم حفظ: 1 ${SOURCE_CURRENCY} = ${rate} ${currency}`;panel.querySelector('#previewFxStatus').style.color='var(--green)';applyDocument();
+      localStorage.setItem(rateKey(source,currency),String(rate));panel.querySelector('#previewFxStatus').textContent=`تم حفظ: 1 ${source} = ${rate} ${currency}`;panel.querySelector('#previewFxStatus').style.color='var(--green)';applyDocument();
     });
   }
-  const {currency}=state();const rate=getRate(currency);const inputs=panel.querySelector('#previewFxInputs');
-  panel.style.display=currency===SOURCE_CURRENCY?'none':'block';if(currency===SOURCE_CURRENCY)return;
-  panel.querySelector('#previewFxHelp').textContent=`قيم النموذج الأصلية مسجلة بـ ${SOURCE_CURRENCY}. لا نغيّر الرمز فقط؛ التحويل إلى ${currency} يحتاج سعر صرف.`;
+  const {currency}=state(),source=sourceCurrency(),rate=getRate(currency),inputs=panel.querySelector('#previewFxInputs');
+  panel.style.display=currency===source?'none':'block';if(currency===source)return;
+  panel.querySelector('#previewFxHelp').textContent=`بياناتك الحالية محفوظة بعملة ${source}. التحويل إلى ${currency} يحتاج سعر صرف.`;
   panel.querySelector('#previewFxRate').value=rate===null?'':String(rate);
-  panel.querySelector('#previewFxRate').placeholder=`1 ${SOURCE_CURRENCY} = ? ${currency}`;
+  panel.querySelector('#previewFxRate').placeholder=`1 ${source} = ? ${currency}`;
   inputs.style.display='grid';
-  panel.querySelector('#previewFxStatus').textContent=rate===null?'لا يوجد سعر محفوظ؛ ستبقى القيم بـ USD حتى تحفظ سعراً.':`نشط: 1 ${SOURCE_CURRENCY} = ${rate} ${currency}`;
+  panel.querySelector('#previewFxStatus').textContent=rate===null?`لا يوجد سعر محفوظ بين ${source} و ${currency}.`:`نشط: 1 ${source} = ${rate} ${currency}`;
   panel.querySelector('#previewFxStatus').style.color=rate===null?'var(--amber)':'var(--green)';
 }
 function syncControls(){
@@ -165,17 +168,16 @@ function syncControls(){
   if(ls&&[...ls.options].some(o=>o.value===lang))ls.value=lang;if(cs&&[...cs.options].some(o=>o.value===currency))cs.value=currency;
 }
 function fixLocalePreview(){
-  const {currency,meta}=state();const rate=getRate(currency);const amount=document.getElementById('localeAmountPreview'),compact=document.getElementById('localeCompactPreview');
+  const {currency,meta}=state(),amount=document.getElementById('localeAmountPreview'),compact=document.getElementById('localeCompactPreview');
   if(!amount||!compact)return;
-  if(currency===SOURCE_CURRENCY){amount.textContent=money(12840.5,SOURCE_CURRENCY,meta.locale);compact.textContent=money(1280,SOURCE_CURRENCY,meta.locale);return}
-  if(rate===null){amount.textContent=`12,840.50 ${SOURCE_CURRENCY}`;compact.textContent='سعر الصرف مطلوب';return}
-  amount.textContent=money(12840.5*rate,currency,meta.locale);compact.textContent=money(1280*rate,currency,meta.locale);
+  amount.textContent=money(0,currency,meta.locale);
+  compact.textContent=money(0,currency,meta.locale);
 }
 function applyDocument(){
   if(applying)return;applying=true;
   try{
     const {lang,meta}=state();document.documentElement.lang=lang;document.documentElement.dir=meta.dir;document.body&&document.body.setAttribute('dir',meta.dir);
-    syncControls();if(typeof window.renderLocale==='function'){try{window.renderLocale()}catch(_){}}
+    ensureCenteredSelectors();syncControls();if(typeof window.renderLocale==='function'){try{window.renderLocale()}catch(_){}}
     applyText(document.body);applyBareValues();ensureFxPanel();fixLocalePreview();
     if(typeof window.FLOSI_LATINIZE_DIGITS==='function')window.FLOSI_LATINIZE_DIGITS();
   }finally{applying=false}
@@ -198,9 +200,13 @@ function startObserver(){
   observer=new MutationObserver(ms=>{if(applying)return;if(ms.some(m=>m.type==='childList'&&m.addedNodes.length))requestAnimationFrame(applyDocument)});
   observer.observe(document.body,{childList:true,subtree:true});
 }
+function loadPreviewState(){
+  if(window.__FLOSI_PREVIEW_STATE__||document.getElementById('flosiPreviewStateScript'))return;
+  const script=document.createElement('script');script.id='flosiPreviewStateScript';script.src='flosi-preview-state.js?v=20260823-zero-iqd-1';document.body.appendChild(script);
+}
 
 if(!localStorage.getItem('flosi-lang'))localStorage.setItem('flosi-lang','ar');
 if(!localStorage.getItem('flosi-currency'))localStorage.setItem('flosi-currency','IQD');
 localStorage.removeItem('flosi-lang-preview');localStorage.removeItem('flosi-currency-preview');
-bind();applyDocument();startObserver();
+bind();applyDocument();startObserver();loadPreviewState();
 })();
