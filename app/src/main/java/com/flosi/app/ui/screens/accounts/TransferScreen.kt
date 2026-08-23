@@ -1,4 +1,5 @@
 package com.flosi.app.ui.screens.accounts
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,22 +15,62 @@ import com.flosi.app.ui.viewmodel.AccountsViewModel
 import com.flosi.app.ui.viewmodel.flosiViewModel
 import com.flosi.app.ui.viewmodel.rememberFlosiPreferences
 
-@Composable fun TransferScreen(onBack:()->Unit){
- val vm:AccountsViewModel=flosiViewModel();val accounts by vm.accounts.collectAsState();val lang=LocalFlosiLanguage.current
- val prefs=rememberFlosiPreferences();val settings by prefs.state.collectAsState(initial=FlosiPreferencesState())
- var from by remember{mutableStateOf<Long?>(null)};var to by remember{mutableStateOf<Long?>(null)};var amount by remember{mutableStateOf("")}
- val fromAccount=accounts.firstOrNull{it.id==from};val toAccount=accounts.firstOrNull{it.id==to};val amountLong=amount.toLongOrNull()?:0L
- val quoted=if(fromAccount!=null&&toAccount!=null&&amountLong>0) CurrencyConverter.convert(amountLong,fromAccount.currency,toAccount.currency,settings.exchangeRates) else null
- FlosiPage(localizedLegacyText("تحويل بين الحسابات"),localizedLegacyText("يحدث الرصيدين فوراً"),onBack){
-  Text(if(lang=="ar")"من" else "From");Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){accounts.take(4).forEach{a->FilterChip(from==a.id,{from=a.id},{Text("${a.name} ${a.currency}")})}}
-  Text(if(lang=="ar")"إلى" else "To");Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){accounts.take(4).forEach{a->FilterChip(to==a.id,{to=a.id},{Text("${a.name} ${a.currency}")})}}
-  OutlinedTextField(amount,{amount=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text(flosiText("amount"))})
-  if(fromAccount!=null&&toAccount!=null&&amountLong>0){
-   CardBox{
-    if(quoted!=null) Metric(localizedLegacyText("سيصل للحساب الآخر"),moneyText(quoted,toAccount.currency),FlosiGreen)
-    else Text(if(lang=="ar")"لا يوجد سعر تحويل من ${fromAccount.currency} إلى ${toAccount.currency}. أضف السعر من إعدادات العملة أولاً." else "No exchange rate from ${fromAccount.currency} to ${toAccount.currency}. Add the rate in currency settings first.",color=FlosiOrange)
-   }
-  }
-  Button(onClick={vm.transfer(from!!,to!!,amountLong);onBack()},enabled=from!=null&&to!=null&&from!=to&&amountLong>0&&quoted!=null,modifier=Modifier.fillMaxWidth()){Text(flosiText("transfer"))}
- }
+@Composable
+fun TransferScreen(onBack:()->Unit){
+    val vm:AccountsViewModel=flosiViewModel()
+    val accounts by vm.accounts.collectAsState()
+    val lang=LocalFlosiLanguage.current
+    val prefs=rememberFlosiPreferences()
+    val settings by prefs.state.collectAsState(initial=FlosiPreferencesState())
+    var from by remember{mutableStateOf<Long?>(null)}
+    var to by remember{mutableStateOf<Long?>(null)}
+    var amount by remember{mutableStateOf("")}
+    var fee by remember{mutableStateOf("0")}
+    var note by remember{mutableStateOf("")}
+    var saving by remember{mutableStateOf(false)}
+    var error by remember{mutableStateOf<String?>(null)}
+
+    val fromAccount=accounts.firstOrNull{it.id==from}
+    val toAccount=accounts.firstOrNull{it.id==to}
+    val amountLong=amount.toLongOrNull()?:0L
+    val feeLong=fee.toLongOrNull()?:0L
+    val quoted=if(fromAccount!=null&&toAccount!=null&&amountLong>0) CurrencyConverter.convert(amountLong,fromAccount.currency,toAccount.currency,settings.exchangeRates) else null
+    val debit=runCatching{Math.addExact(amountLong,feeLong)}.getOrNull()
+    fun s(ar:String,en:String)=if(lang=="ar")ar else en
+
+    FlosiPage(localizedLegacyText("تحويل بين الحسابات"),localizedLegacyText("يحدث الرصيدين فوراً"),onBack){
+        Text(s("من","From"))
+        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){accounts.take(6).forEach{a->FilterChip(from==a.id,{from=a.id;error=null},{Text("${a.name} ${a.currency}")})}}
+        Text(s("إلى","To"))
+        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){accounts.take(6).forEach{a->FilterChip(to==a.id,{to=a.id;error=null},{Text("${a.name} ${a.currency}")})}}
+        OutlinedTextField(amount,{amount=it.filter(Char::isDigit);error=null},Modifier.fillMaxWidth(),label={Text(flosiText("amount"))},singleLine=true)
+        OutlinedTextField(fee,{fee=it.filter(Char::isDigit).ifBlank{"0"};error=null},Modifier.fillMaxWidth(),label={Text(s("رسوم التحويل — اختياري","Transfer fee — optional"))},singleLine=true)
+        OutlinedTextField(note,{note=it;error=null},Modifier.fillMaxWidth(),label={Text(s("ملاحظة — اختياري","Note — optional"))})
+
+        if(fromAccount!=null&&toAccount!=null&&amountLong>0){
+            CardBox{
+                if(quoted!=null) {
+                    Metric(localizedLegacyText("سيصل للحساب الآخر"),moneyText(quoted,toAccount.currency),FlosiGreen)
+                    if(feeLong>0L) ActionRow(s("رسوم التحويل","Transfer fee"),"",moneyText(feeLong,fromAccount.currency),FlosiOrange)
+                    debit?.let{ActionRow(s("إجمالي الخصم من المصدر","Total debit from source"),"",moneyText(it,fromAccount.currency),FlosiPurple)}
+                } else Text(s("لا يوجد سعر تحويل من ${fromAccount.currency} إلى ${toAccount.currency}. أضف السعر من إعدادات العملة أولاً.","No exchange rate from ${fromAccount.currency} to ${toAccount.currency}. Add the rate in currency settings first."),color=FlosiOrange)
+            }
+        }
+        error?.let{Text(it,color=FlosiRed)}
+        Button(
+            onClick={
+                val source=from ?: return@Button
+                val target=to ?: return@Button
+                saving=true;error=null
+                vm.transfer(source,target,amountLong,feeLong){message->
+                    saving=false
+                    if(message==null) onBack() else error=message
+                }
+            },
+            enabled=!saving&&from!=null&&to!=null&&from!=to&&amountLong>0&&feeLong>=0&&debit!=null&&quoted!=null,
+            modifier=Modifier.fillMaxWidth()
+        ){
+            if(saving) CircularProgressIndicator(strokeWidth=2.dp) else Text(flosiText("transfer"))
+        }
+    }
 }
