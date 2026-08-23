@@ -4,11 +4,6 @@ if(window.__FLOSI_GOALS__)return;
 window.__FLOSI_GOALS__=true;
 
 const STORAGE_KEY='flosi-preview-goals-v1';
-const DEFAULTS=[
-  {id:'travel',name:'السفر',target:0,saved:0,currency:'IQD',deadline:''},
-  {id:'emergency',name:'صندوق الطوارئ',target:0,saved:0,currency:'IQD',deadline:''}
-];
-
 function selectedCurrency(){return (localStorage.getItem('flosi-currency')||'IQD').toUpperCase()}
 function locale(){return localStorage.getItem('flosi-locale')||'ar-IQ'}
 function digits(currency){return ['IQD','JPY','KRW'].includes(currency)?0:2}
@@ -17,19 +12,11 @@ function money(value,currency){
   catch(_){return `${Number(value||0).toLocaleString('en-US')} ${currency}`}
 }
 function read(){
-  try{
-    const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
-    if(parsed&&parsed.version===1&&Array.isArray(parsed.goals))return parsed.goals;
-  }catch(_){ }
-  const currency=selectedCurrency();
-  const goals=DEFAULTS.map(g=>({...g,currency}));
-  write(goals);return goals;
+  try{const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');if(parsed&&parsed.version===1&&Array.isArray(parsed.goals))return parsed.goals}catch(_){ }
+  write([]);return [];
 }
-function write(goals){localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,goals}))}
-function toast(msg){
-  if(typeof window.toast==='function'){window.toast(msg);return}
-  const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)
-}
+function write(goals){localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,goals}));window.dispatchEvent(new CustomEvent('flosi-goals-changed'))}
+function toast(msg){if(typeof window.toast==='function'){window.toast(msg);return}const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function progress(g){const target=Number(g.target)||0,saved=Math.max(0,Number(g.saved)||0);return target>0?Math.max(0,Math.min(100,Math.round(saved/target*100))):0}
 
@@ -43,31 +30,26 @@ function ensureStyle(){
 function ensureModal(){
   let modal=document.getElementById('flosiGoalModal');if(modal)return modal;
   modal=document.createElement('div');modal.id='flosiGoalModal';modal.className='flosiGoalModal';modal.setAttribute('data-locale-no-transform','');
-  modal.innerHTML=`<div class="flosiGoalSheet"><h3 id="flosiGoalTitle">تعديل الهدف</h3><div class="flosiGoalField"><label>اسم الهدف</label><input id="flosiGoalName" maxlength="40"></div><div class="flosiGoalField"><label id="flosiGoalTargetLabel">المبلغ المستهدف</label><input id="flosiGoalTarget" inputmode="decimal" type="number" min="0"></div><div class="flosiGoalField"><label>تاريخ الوصول المستهدف</label><input id="flosiGoalDeadline" type="date"></div><div class="flosiGoalHint">المبلغ المدخر لا يتغير من شاشة التعديل؛ يتغير من عمليات الادخار المرتبطة بالهدف حتى تبقى الحسابات المالية صحيحة.</div><div class="flosiGoalActions"><button class="flosiGoalSave" id="flosiGoalSave">حفظ</button><button class="flosiGoalCancel" id="flosiGoalCancel">إلغاء</button></div><button class="flosiGoalDelete" id="flosiGoalDelete">حذف الهدف</button></div>`;
-  document.body.appendChild(modal);
-  modal.addEventListener('click',e=>{if(e.target===modal)closeEditor()});
-  document.getElementById('flosiGoalCancel').onclick=closeEditor;
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('open'))closeEditor()});
-  return modal;
+  modal.innerHTML=`<div class="flosiGoalSheet"><h3 id="flosiGoalTitle">تعديل الهدف</h3><div class="flosiGoalField"><label>اسم الهدف</label><input id="flosiGoalName" maxlength="40"></div><div class="flosiGoalField"><label id="flosiGoalTargetLabel">المبلغ المستهدف</label><input id="flosiGoalTarget" inputmode="decimal" type="number" min="0"></div><div class="flosiGoalField"><label id="flosiGoalSavedLabel">المبلغ المدخر والمحجوز</label><input id="flosiGoalSaved" inputmode="decimal" type="number" min="0"></div><div class="flosiGoalField"><label>تاريخ الوصول المستهدف</label><input id="flosiGoalDeadline" type="date"></div><div class="flosiGoalHint">المبلغ المدخر يُعامل كحجز للهدف وليس كمصروف، لذلك يُخصم من «المتاح للصرف بأمان» ولا يُنقص الرصيد الكلي.</div><div class="flosiGoalActions"><button class="flosiGoalSave" id="flosiGoalSave">حفظ</button><button class="flosiGoalCancel" id="flosiGoalCancel">إلغاء</button></div><button class="flosiGoalDelete" id="flosiGoalDelete">حذف الهدف</button></div>`;
+  document.body.appendChild(modal);modal.addEventListener('click',e=>{if(e.target===modal)closeEditor()});document.getElementById('flosiGoalCancel').onclick=closeEditor;document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('open'))closeEditor()});return modal;
 }
 
 let editingId=null;
 function openEditor(id=null){
   const goals=read(),goal=id?goals.find(g=>g.id===id):null,currency=goal?.currency||selectedCurrency();editingId=id;
-  ensureModal();document.getElementById('flosiGoalTitle').textContent=goal?'تعديل الهدف':'هدف جديد';document.getElementById('flosiGoalName').value=goal?.name||'';document.getElementById('flosiGoalTarget').value=goal&&Number(goal.target)>0?String(goal.target):'';document.getElementById('flosiGoalDeadline').value=goal?.deadline||'';document.getElementById('flosiGoalTargetLabel').textContent=`المبلغ المستهدف (${currency})`;document.getElementById('flosiGoalDelete').style.display=goal?'block':'none';document.getElementById('flosiGoalModal').classList.add('open');setTimeout(()=>document.getElementById('flosiGoalName').focus(),60)
+  ensureModal();document.getElementById('flosiGoalTitle').textContent=goal?'تعديل الهدف':'هدف جديد';document.getElementById('flosiGoalName').value=goal?.name||'';document.getElementById('flosiGoalTarget').value=goal&&Number(goal.target)>0?String(goal.target):'';document.getElementById('flosiGoalSaved').value=goal&&Number(goal.saved)>0?String(goal.saved):'0';document.getElementById('flosiGoalDeadline').value=goal?.deadline||'';document.getElementById('flosiGoalTargetLabel').textContent=`المبلغ المستهدف (${currency})`;document.getElementById('flosiGoalSavedLabel').textContent=`المبلغ المدخر والمحجوز (${currency})`;document.getElementById('flosiGoalDelete').style.display=goal?'block':'none';document.getElementById('flosiGoalModal').classList.add('open');setTimeout(()=>document.getElementById('flosiGoalName').focus(),60)
 }
 function closeEditor(){document.getElementById('flosiGoalModal')?.classList.remove('open');editingId=null}
 function saveEditor(){
-  const name=document.getElementById('flosiGoalName').value.trim(),target=Number(document.getElementById('flosiGoalTarget').value||0),deadline=document.getElementById('flosiGoalDeadline').value;
-  if(!name){toast('اكتب اسم الهدف');return}if(!Number.isFinite(target)||target<0){toast('أدخل مبلغاً مستهدفاً صحيحاً');return}
-  const goals=read();if(editingId){const i=goals.findIndex(g=>g.id===editingId);if(i>=0)goals[i]={...goals[i],name,target,deadline}}else{goals.push({id:`goal-${Date.now()}`,name,target,saved:0,currency:selectedCurrency(),deadline})}
-  write(goals);closeEditor();render();toast('تم حفظ الهدف')
+  const name=document.getElementById('flosiGoalName').value.trim(),target=Number(document.getElementById('flosiGoalTarget').value||0),saved=Number(document.getElementById('flosiGoalSaved').value||0),deadline=document.getElementById('flosiGoalDeadline').value;
+  if(!name){toast('اكتب اسم الهدف');return}if(!Number.isFinite(target)||target<=0){toast('المبلغ المستهدف يجب أن يكون أكبر من صفر');return}if(!Number.isFinite(saved)||saved<0||saved>target){toast('المبلغ المدخر يجب أن يكون بين صفر والمبلغ المستهدف');return}
+  const goals=read();if(editingId){const i=goals.findIndex(g=>g.id===editingId);if(i>=0)goals[i]={...goals[i],name,target,saved,deadline}}else{goals.push({id:`goal-${Date.now()}`,name,target,saved,currency:selectedCurrency(),deadline})}
+  write(goals);closeEditor();render();toast('تم حفظ الهدف وتحديث المتاح الآمن')
 }
 function deleteEditor(){if(!editingId)return;const goals=read().filter(g=>g.id!==editingId);write(goals);closeEditor();render();toast('تم حذف الهدف')}
 
 function render(){
-  const plan=document.getElementById('plan');if(!plan)return;
-  ensureStyle();ensureModal();
+  const plan=document.getElementById('plan');if(!plan)return;ensureStyle();ensureModal();
   let toolbar=document.getElementById('flosiGoalToolbar');
   if(!toolbar){toolbar=document.createElement('div');toolbar.id='flosiGoalToolbar';toolbar.className='flosiGoalToolbar';toolbar.setAttribute('data-locale-no-transform','');toolbar.innerHTML='<b>أهدافك</b><button class="flosiGoalAdd" id="flosiGoalAdd">+ هدف جديد</button>';const head=plan.querySelector('.head');head?.insertAdjacentElement('afterend',toolbar);document.getElementById('flosiGoalAdd').onclick=()=>openEditor()}
   let list=document.getElementById('flosiGoalList');
@@ -76,7 +58,7 @@ function render(){
   if(!goals.length){const e=document.createElement('div');e.className='flosiGoalEmpty';e.textContent='لا توجد أهداف. اضغط «هدف جديد» لإضافة أول هدف.';list.appendChild(e);return}
   goals.forEach(g=>{
     const p=progress(g),card=document.createElement('div');card.className='flosiGoalCard';card.setAttribute('role','button');card.tabIndex=0;card.dataset.goalId=g.id;
-    const target=Number(g.target)||0,saved=Math.min(Math.max(0,Number(g.saved)||0),target||Number(g.saved)||0),sub=target>0?`${money(saved,g.currency)} / ${money(target,g.currency)}`:`المبلغ المستهدف غير محدد • ${g.currency}`;
+    const target=Number(g.target)||0,saved=Math.min(Math.max(0,Number(g.saved)||0),target),sub=`${money(saved,g.currency)} / ${money(target,g.currency)}`;
     card.innerHTML=`<div class="flosiGoalRing" style="background:conic-gradient(var(--p) 0 ${p}%,#eeeaf4 ${p}% 100%)"><b>${p}%</b></div><div class="flosiGoalCopy"><b>${esc(g.name)}</b><small>${esc(sub)}${g.deadline?` • ${esc(g.deadline)}`:''}</small></div><button class="flosiGoalEdit" aria-label="تعديل الهدف">✎</button>`;
     const open=()=>openEditor(g.id);card.onclick=open;card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};card.querySelector('.flosiGoalEdit').onclick=e=>{e.stopPropagation();open()};list.appendChild(card)
   });
