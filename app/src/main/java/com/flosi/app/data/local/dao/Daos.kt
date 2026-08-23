@@ -135,7 +135,7 @@ interface TransactionDao {
 
     @Query("""
         SELECT COALESCE(SUM(
-            CASE WHEN kind IN ('income','transfer_in','invoice_payment') THEN amount
+            CASE WHEN kind IN ('income','invoice_payment') THEN amount
                  ELSE 0 END
         ),0)
         FROM transactions
@@ -145,7 +145,7 @@ interface TransactionDao {
 
     @Query("""
         SELECT COALESCE(SUM(
-            CASE WHEN kind IN ('expense','transfer_out') THEN amount
+            CASE WHEN kind='expense' THEN amount
                  ELSE 0 END
         ),0)
         FROM transactions
