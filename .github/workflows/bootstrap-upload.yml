@@ -16,7 +16,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Rebuild source archive
         run: |
-          cat bootstrap/chunk-* | base64 -d > flosi-source.zip
+          cat \
+            bootstrap/chunk-00 bootstrap/chunk-01 bootstrap/chunk-02 \
+            bootstrap/chunk-03 bootstrap/chunk-04 bootstrap/chunk-05 \
+            bootstrap/chunk-06 bootstrap/chunk-07 bootstrap/chunk-08 \
+            bootstrap/chunk-09a bootstrap/chunk-10a bootstrap/chunk-10b \
+            | base64 -d > flosi-source.zip
+          unzip -t flosi-source.zip
           unzip -o flosi-source.zip -d .bootstrap
           cp -a .bootstrap/flosi-native-v1.4-premium-rtl-home/. .
           rm -rf .bootstrap flosi-source.zip bootstrap .github/workflows/bootstrap-upload.yml
