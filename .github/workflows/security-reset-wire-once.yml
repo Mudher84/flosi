@@ -1,0 +1,41 @@
+name: Wire Security Reset Once
+on:
+  push:
+    paths:
+      - '.github/workflows/security-reset-wire-once.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wire reset script and bump preview cache
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path('preview/flosi2.html')
+          text=html.read_text(encoding='utf-8')
+          tag='<script src="flosi-security-reset.js?v=20260823-reset-1"></script>'
+          if tag not in text:
+              if '</body>' not in text:
+                  raise SystemExit('body close tag not found')
+              text=text.replace('</body>',tag+'\n</body>')
+              html.write_text(text,encoding='utf-8')
+
+          index=Path('preview/index.html')
+          idx=index.read_text(encoding='utf-8')
+          import re
+          idx=re.sub(r'flosi2\.html\?v=[A-Za-z0-9._-]+','flosi2.html?v=20260823-security-reset-1',idx)
+          index.write_text(idx,encoding='utf-8')
+          PY
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          rm .github/workflows/security-reset-wire-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add preview/flosi2.html preview/index.html .github/workflows/security-reset-wire-once.yml
+          git commit -m 'feat: enable forgot-password reset in security preview'
+          git push
