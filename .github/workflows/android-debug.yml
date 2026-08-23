@@ -42,12 +42,20 @@ jobs:
           FLOSI_KEY_PASSWORD: ${{ secrets.FLOSI_KEY_PASSWORD }}
         run: gradle --no-daemon assembleRelease --stacktrace
 
-      - name: Verify APK signature
+      - name: Verify APK signature and Firebase fingerprints
         shell: bash
         run: |
+          set -euo pipefail
           APK="$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
           test -n "$APK"
-          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)/apksigner" verify --verbose --print-certs "$APK"
+          APKSIGNER="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)/apksigner"
+          CERTS="$($APKSIGNER verify --verbose --print-certs "$APK")"
+          printf '%s\n' "$CERTS"
+          SHA1="$(printf '%s\n' "$CERTS" | sed -n 's/.*certificate SHA-1 digest: //p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
+          SHA256="$(printf '%s\n' "$CERTS" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
+          test "$SHA1" = "52b03c94d73bfbb7509c8401054683ded72908ad"
+          test "$SHA256" = "138b997ec6ab9906a4702c642bdf5893e585206a07bd04f717160cc3984443dc"
+          echo "Firebase signing fingerprints verified."
 
       - uses: actions/upload-artifact@v4
         with:
