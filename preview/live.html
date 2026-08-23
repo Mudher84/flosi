@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><title>Flosi Live</title><style>html,body{margin:0;min-height:100%;background:#f7f6fb}</style></head>
+<body>
+<script>
+(async()=>{try{const res=await fetch('flosi2.html?v='+Date.now(),{cache:'no-store'});if(!res.ok)throw new Error('load '+res.status);let html=await res.text();html=html.replace('</body>','<script src="flosi-transaction-capsule.js?v='+Date.now()+'"><\/script></body>');document.open();document.write(html);document.close()}catch(e){document.body.innerHTML='<div style="padding:30px;font-family:system-ui;direction:rtl"><h2>تعذر تحميل Flosi</h2><pre>'+String(e)+'</pre></div>'}})();
+</script>
+</body></html>
