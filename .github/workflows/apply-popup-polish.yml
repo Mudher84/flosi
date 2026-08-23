@@ -1,0 +1,61 @@
+name: Apply Flosi popup polish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-popup-polish.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Polish add-transaction popup
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('preview/flosi2.html')
+          s = p.read_text(encoding='utf-8')
+
+          old_css = ".modal{position:fixed;inset:0;background:#17131f99;display:none;align-items:flex-end;z-index:100}.modal.open{display:flex}.sheet{width:100%;background:#fff;border-radius:26px 26px 0 0;padding:20px 18px calc(18px + env(safe-area-inset-bottom))}"
+          new_css = ".modal{position:fixed;inset:0;background:rgba(20,14,29,.58);display:none;align-items:center;justify-content:center;padding:18px;z-index:100;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}.modal.open{display:flex;animation:modalFade .18s ease-out}.sheet{width:min(100%,480px);max-height:min(86vh,680px);overflow:auto;background:linear-gradient(180deg,#fff 0%,#fcfaff 100%);border:1px solid rgba(255,255,255,.85);border-radius:28px;padding:22px;box-shadow:0 30px 80px rgba(27,18,39,.28),0 8px 26px rgba(27,18,39,.12);position:relative;animation:sheetPop .22s cubic-bezier(.2,.8,.2,1)}.sheet:before{content:\"\";position:absolute;top:0;left:24px;right:24px;height:3px;border-radius:0 0 99px 99px;background:linear-gradient(90deg,transparent,#9b62ff 25%,#7138eb 75%,transparent)}.sheet h3{margin:2px 0 18px!important;font-size:20px;display:flex;align-items:center;gap:10px}.sheet h3:before{content:\"+\";width:38px;height:38px;border-radius:13px;background:linear-gradient(145deg,#955bff,#7138eb);color:#fff;display:grid;place-items:center;font-family:Inter,system-ui,sans-serif;font-size:24px;font-weight:400;box-shadow:0 9px 20px rgba(123,68,239,.25)}.sheet .field{gap:7px;margin:13px 0}.sheet .field label{font-size:10px;color:#756d80;font-weight:700;padding-inline:3px}.sheet .field input,.sheet .field select{height:50px;border:1px solid #e7e0ef;border-radius:15px;background:#faf9fc;padding:0 14px;outline:0;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}.sheet .field input:focus,.sheet .field select:focus{border-color:#b489ff;background:#fff;box-shadow:0 0 0 4px rgba(123,68,239,.09)}.sheet>div:last-child{display:grid!important;grid-template-columns:1fr 1fr;gap:10px!important;margin-top:18px}.sheet>div:last-child .btn{width:100%;height:48px;border-radius:15px;font-weight:700}.sheet>div:last-child .primary{background:linear-gradient(145deg,#955bff,#7138eb);box-shadow:0 10px 22px rgba(123,68,239,.24)}.sheet>div:last-child .secondary{background:#f3f0f7;color:#615a69}@keyframes modalFade{from{opacity:0}to{opacity:1}}@keyframes sheetPop{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}"
+
+          if old_css not in s:
+              raise SystemExit('popup CSS target not found')
+          s = s.replace(old_css, new_css, 1)
+
+          old_js = "document.getElementById('closeModal').onclick=()=>modal.classList.remove('open');"
+          new_js = "document.getElementById('closeModal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('open'))modal.classList.remove('open')});"
+          if old_js not in s:
+              raise SystemExit('popup JS target not found')
+          s = s.replace(old_js, new_js, 1)
+          p.write_text(s, encoding='utf-8')
+
+          idx = Path('preview/index.html')
+          if idx.exists():
+              t = idx.read_text(encoding='utf-8')
+              t = re.sub(r'flosi2\.html\?v=[^\"\']+', 'flosi2.html?v=20260823-1734-popup', t)
+              idx.write_text(t, encoding='utf-8')
+          PY
+
+      - name: Commit popup polish
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No changes needed.'
+            exit 0
+          fi
+          git config user.name 'Flosi Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add preview/flosi2.html preview/index.html
+          git commit -m 'ui: make add transaction a professional centered popup'
+          git push origin main
