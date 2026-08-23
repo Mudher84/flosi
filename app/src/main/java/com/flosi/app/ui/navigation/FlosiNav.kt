@@ -1,5 +1,8 @@
 package com.flosi.app.ui.navigation
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -14,16 +17,21 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.flosi.app.security.AppSecurity
 import com.flosi.app.ui.components.FlosiPurple
 import com.flosi.app.ui.screens.accounts.*
 import com.flosi.app.ui.screens.activity.*
@@ -75,6 +83,45 @@ object R {
 
 @Composable
 fun FlosiApp() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = remember(context) { context.findActivity() }
+    var securityEpoch by remember { mutableIntStateOf(0) }
+    var locked by remember { mutableStateOf(AppSecurity.shouldLock(context)) }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> locked = AppSecurity.shouldLock(context)
+                Lifecycle.Event.ON_STOP -> AppSecurity.onBackground(context)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(securityEpoch, activity) {
+        activity?.let { AppSecurity.applySecureFlag(it) }
+        locked = AppSecurity.shouldLock(context)
+    }
+
+    DisposableEffect(activity) {
+        activity?.let { AppSecurity.applySecureFlag(it) }
+        onDispose { }
+    }
+
+    if (locked) {
+        FlosiLockScreen(
+            onUnlocked = {
+                AppSecurity.markUnlocked(context)
+                locked = false
+                securityEpoch++
+            }
+        )
+        return
+    }
+
     val nav = rememberNavController()
     val current = nav.currentBackStackEntryAsState().value?.destination?.route
     val rootRoutes = setOf(R.TODAY, R.ACTIVITY, R.PEOPLE, R.ME)
@@ -241,9 +288,10 @@ fun FlosiApp() {
             composable(R.NOTIFICATIONS) { NotificationsScreen(onBack = { nav.popBackStack() }) }
 
             composable(R.SECURITY) {
-                SecurityBackupScreen(
+                SecurityCenterScreen(
                     onBack = { nav.popBackStack() },
-                    onBackups = { nav.navigate(R.BACKUPS) }
+                    onBackups = { nav.navigate(R.BACKUPS) },
+                    onSecurityChanged = { securityEpoch++ }
                 )
             }
 
@@ -333,4 +381,10 @@ private fun RootBottomBar(
             label = { Text("اليوم") }
         )
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
