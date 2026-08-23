@@ -8,6 +8,7 @@ import com.flosi.app.domain.model.CategorySpend
 import com.flosi.app.domain.model.DashboardSnapshot
 import com.flosi.app.domain.model.SearchHit
 import com.flosi.app.finance.CurrencyConverter
+import com.flosi.app.finance.InvoiceMath
 import com.flosi.app.settings.FlosiPreferences
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
@@ -99,6 +100,8 @@ class FinanceRepository(
     }
 
     private suspend fun addTransactionInternal(tx: TransactionEntity): Long {
+        require(tx.amount > 0L) { "المبلغ يجب أن يكون أكبر من صفر" }
+        db.accountDao().get(tx.accountId) ?: error("الحساب غير موجود")
         val id = db.transactionDao().insert(tx)
         applyAccountingEffect(tx, reverse = false)
         return id
@@ -108,16 +111,33 @@ class FinanceRepository(
 
     suspend fun editTransaction(updated: TransactionEntity) = db.withTransaction {
         val old = db.transactionDao().get(updated.id) ?: return@withTransaction
+        require(old.kind !in setOf("transfer_in","transfer_out")) { "عدّل التحويل من شاشة التحويل حتى يبقى الطرفان متطابقين" }
+        require(old.linkedTransactionId == null) { "هذه الحركة مرتبطة بحركة محاسبية أخرى ولا يمكن تعديلها منفردة" }
+        require(updated.kind !in setOf("transfer_in","transfer_out")) { "لا يمكن تحويل حركة عادية إلى طرف تحويل" }
+        require(updated.amount > 0L) { "المبلغ يجب أن يكون أكبر من صفر" }
         applyAccountingEffect(old, reverse = true)
         db.transactionDao().update(updated.copy(updatedAt = System.currentTimeMillis()))
         applyAccountingEffect(updated, reverse = false)
     }
 
     suspend fun deleteTransaction(id: Long) = db.withTransaction {
-        val old = db.transactionDao().get(id) ?: return@withTransaction
-        if (!old.deleted) {
-            applyAccountingEffect(old, reverse = true)
-            db.transactionDao().softDelete(id)
+        val selected = db.transactionDao().get(id) ?: return@withTransaction
+        if (selected.deleted) return@withTransaction
+
+        val root = when {
+            selected.kind == "transfer_out" -> selected
+            selected.linkedTransactionId != null -> db.transactionDao().get(selected.linkedTransactionId)
+            else -> null
+        }
+        if (root?.kind == "transfer_out") {
+            val group = listOf(root) + db.transactionDao().linkedTo(root.id)
+            group.filterNot { it.deleted }.forEach { tx ->
+                applyAccountingEffect(tx, reverse = true)
+                db.transactionDao().softDelete(tx.id)
+            }
+        } else {
+            applyAccountingEffect(selected, reverse = true)
+            db.transactionDao().softDelete(selected.id)
         }
     }
 
@@ -129,7 +149,7 @@ class FinanceRepository(
             "debt_received" -> +1
             else -> 0
         } * direction
-        if (sign != 0) db.accountDao().adjustBalance(tx.accountId, tx.amount * sign)
+        if (sign != 0) db.accountDao().adjustBalance(tx.accountId, Math.multiplyExact(tx.amount, sign.toLong()))
 
         tx.personId?.let { personId ->
             val personDelta = when (tx.kind) {
@@ -143,9 +163,7 @@ class FinanceRepository(
         }
 
         if (tx.kind == "goal_saving") {
-            tx.goalId?.let { goalId ->
-                db.goalDao().adjustSaved(goalId, tx.amount * direction)
-            }
+            tx.goalId?.let { goalId -> db.goalDao().adjustSaved(goalId, tx.amount * direction) }
         }
     }
 
@@ -158,11 +176,13 @@ class FinanceRepository(
         val prefs=preferences.state.first()
         val received=CurrencyConverter.convert(amount,from.currency,to.currency,prefs.exchangeRates)
             ?: error("لا يوجد سعر تحويل من ${from.currency} إلى ${to.currency}")
+        require(received > 0L) { "قيمة التحويل بعد الصرف غير صالحة" }
+        val debit = Math.addExact(amount, fee)
         val now = System.currentTimeMillis()
         val outId = db.transactionDao().insert(TransactionEntity(kind="transfer_out",amount=amount,title="تحويل صادر",note=note,accountId=fromAccountId,occurredAt=now))
         val inId = db.transactionDao().insert(TransactionEntity(kind="transfer_in",amount=received,title="تحويل وارد",note=note,accountId=toAccountId,linkedTransactionId=outId,occurredAt=now))
         if (fee > 0L) db.transactionDao().insert(TransactionEntity(kind="expense",amount=fee,title="رسوم تحويل",note=note,accountId=fromAccountId,linkedTransactionId=outId,occurredAt=now))
-        db.accountDao().adjustBalance(fromAccountId, -(amount+fee))
+        db.accountDao().adjustBalance(fromAccountId, -debit)
         db.accountDao().adjustBalance(toAccountId, received)
         outId to inId
     }
@@ -193,6 +213,52 @@ class FinanceRepository(
         )
     }
 
+    private fun nextDueAfter(dueAt: Long, repeatRule: String, paidAt: Long): Long? {
+        if (repeatRule in setOf("none","once","")) return null
+        val calendar = Calendar.getInstance().apply { timeInMillis = dueAt }
+        var guard = 0
+        do {
+            when (repeatRule) {
+                "weekly" -> calendar.add(Calendar.DAY_OF_YEAR, 7)
+                "monthly" -> calendar.add(Calendar.MONTH, 1)
+                "yearly" -> calendar.add(Calendar.YEAR, 1)
+                else -> return null
+            }
+            guard++
+        } while (calendar.timeInMillis <= paidAt && guard < 1200)
+        return calendar.timeInMillis
+    }
+
+    suspend fun payCommitment(id: Long): Long = db.withTransaction {
+        val item = db.commitmentDao().get(id) ?: error("الالتزام غير موجود")
+        require(item.active) { "الالتزام غير نشط" }
+        require(item.amount > 0L) { "قيمة الالتزام غير صالحة" }
+        val accountId = item.accountId ?: error("اربط الالتزام بحساب قبل تسجيل الدفع")
+        db.accountDao().get(accountId) ?: error("الحساب المرتبط بالالتزام غير موجود")
+        val paidAt = System.currentTimeMillis()
+        val txId = addTransactionInternal(
+            TransactionEntity(
+                kind = "expense",
+                amount = item.amount,
+                title = item.title,
+                note = "دفع التزام",
+                accountId = accountId,
+                personId = item.personId,
+                categoryId = item.categoryId,
+                occurredAt = paidAt
+            )
+        )
+        val nextDue = nextDueAfter(item.dueAt, item.repeatRule, paidAt)
+        db.commitmentDao().update(
+            item.copy(
+                dueAt = nextDue ?: item.dueAt,
+                active = nextDue != null,
+                lastPaidAt = paidAt
+            )
+        )
+        txId
+    }
+
     fun observeAccount(id:Long) = db.accountDao().observe(id)
     fun observePerson(id:Long) = db.personDao().observe(id)
     fun observePersonTransactions(id:Long) = db.transactionDao().observeForPerson(id)
@@ -209,9 +275,14 @@ class FinanceRepository(
     suspend fun updateGoal(item:GoalEntity) = db.goalDao().update(item.copy(savedAmount=item.savedAmount.coerceIn(0L,item.targetAmount.coerceAtLeast(0L))))
     suspend fun updateInvoice(item:InvoiceEntity) = db.invoiceDao().update(item)
     suspend fun addPerson(person: PersonEntity) = db.personDao().insert(person.copy(currentBalance=person.openingBalance))
-    suspend fun addAccount(account: AccountEntity) = db.accountDao().insert(account.copy(currentBalance=account.openingBalance))
+    suspend fun addAccount(account: AccountEntity) = db.accountDao().insert(account.copy(currentBalance=account.openingBalance,currency=CurrencyConverter.normalizeCode(account.currency)))
     suspend fun addCategory(category: CategoryEntity) = db.categoryDao().insert(category)
-    suspend fun addCommitment(item: CommitmentEntity) = db.commitmentDao().insert(item)
+    suspend fun addCommitment(item: CommitmentEntity): Long {
+        require(item.amount > 0L) { "قيمة الالتزام يجب أن تكون أكبر من صفر" }
+        require(item.remindBeforeDays >= 0) { "مدة التذكير غير صالحة" }
+        item.accountId?.let { db.accountDao().get(it) ?: error("الحساب المرتبط بالالتزام غير موجود") }
+        return db.commitmentDao().insert(item)
+    }
 
     suspend fun addBudget(item: BudgetEntity): Long {
         require(item.limitAmount > 0L) { "حد الميزانية يجب أن يكون أكبر من صفر" }
@@ -223,12 +294,59 @@ class FinanceRepository(
     suspend fun addGoal(item: GoalEntity): Long {
         require(item.targetAmount > 0L) { "قيمة الهدف يجب أن تكون أكبر من صفر" }
         require(item.accountId != null) { "اختر حساباً مرتبطاً بالهدف" }
+        db.accountDao().get(item.accountId) ?: error("الحساب المرتبط بالهدف غير موجود")
         return db.goalDao().insert(item.copy(savedAmount=0L))
     }
 
-    suspend fun createInvoice(invoice: InvoiceEntity, items: List<InvoiceItemEntity>): Long = db.withTransaction {
-        val id = db.invoiceDao().insertInvoice(invoice)
-        db.invoiceDao().insertItems(items.map { it.copy(invoiceId=id) })
+    suspend fun createInvoice(
+        invoice: InvoiceEntity,
+        items: List<InvoiceItemEntity>,
+        paymentAccountId: Long? = null
+    ): Long = db.withTransaction {
+        require(items.isNotEmpty()) { "أضف بنداً واحداً على الأقل" }
+        val normalizedCurrency = CurrencyConverter.normalizeCode(invoice.currency)
+        val canonicalLines = items.map { item ->
+            val lineTotal = InvoiceMath.lineTotal(item.quantity, item.unitPrice)
+            require(item.lineTotal == lineTotal) { "إجمالي أحد بنود الفاتورة غير متطابق" }
+            item.copy(lineTotal = lineTotal)
+        }
+        val totals = InvoiceMath.totals(
+            lineTotals = canonicalLines.map { it.lineTotal },
+            discount = invoice.discount,
+            taxPercent = invoice.taxPercent,
+            paid = invoice.paidAmount
+        )
+        val canonicalInvoice = invoice.copy(
+            currency = normalizedCurrency,
+            subtotal = totals.subtotal,
+            discount = totals.discount,
+            taxAmount = totals.taxAmount,
+            total = totals.total,
+            paidAmount = totals.paid,
+            status = totals.status
+        )
+        val id = db.invoiceDao().insertInvoice(canonicalInvoice)
+        db.invoiceDao().insertItems(canonicalLines.map { it.copy(invoiceId=id) })
+
+        if (totals.paid > 0L) {
+            val accountId = paymentAccountId ?: error("اختر حساب استلام الدفعة")
+            val account = db.accountDao().get(accountId) ?: error("حساب استلام الدفعة غير موجود")
+            val prefs = preferences.state.first()
+            val accountAmount = CurrencyConverter.convert(totals.paid, normalizedCurrency, account.currency, prefs.exchangeRates)
+                ?: error("لا يوجد سعر تحويل من $normalizedCurrency إلى ${account.currency}")
+            require(accountAmount > 0L) { "قيمة الدفعة بعد التحويل غير صالحة" }
+            val kind = if (canonicalInvoice.type == "purchase") "expense" else "invoice_payment"
+            addTransactionInternal(
+                TransactionEntity(
+                    kind = kind,
+                    amount = accountAmount,
+                    title = if (kind == "invoice_payment") "دفعة فاتورة ${canonicalInvoice.number}" else "دفع فاتورة ${canonicalInvoice.number}",
+                    note = "invoice:$id",
+                    accountId = accountId,
+                    occurredAt = canonicalInvoice.issuedAt
+                )
+            )
+        }
         id
     }
 
