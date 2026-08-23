@@ -23,13 +23,22 @@ private fun decimalInput(raw:String):String{val out=StringBuilder();var separato
 fun CreateInvoiceScreen(onBack:()->Unit){
     val vm:InvoicesViewModel=flosiViewModel();val accounts by vm.accounts.collectAsState();val preferences=rememberFlosiPreferences();val prefs by preferences.state.collectAsState(initial=FlosiPreferencesState());val lang=LocalFlosiLanguage.current
     val currency=prefs.currency.trim().uppercase().ifBlank{"IQD"};val lines=remember{mutableStateListOf<DraftInvoiceLine>()}
+    var invoiceType by remember{mutableStateOf("sale")}
     var title by remember{mutableStateOf("")};var qty by remember{mutableStateOf("1")};var price by remember{mutableStateOf("")};var discount by remember{mutableStateOf("0")};var taxPercent by remember{mutableStateOf("0")};var paid by remember{mutableStateOf("0")};var paymentAccountId by remember{mutableStateOf<Long?>(null)};var accountMenu by remember{mutableStateOf(false)};var saving by remember{mutableStateOf(false)};var error by remember{mutableStateOf<String?>(null)}
     val quantity=decimalValue(qty);val unitPrice=price.toLongOrNull();val currentLineTotal=if(quantity!=null&&unitPrice!=null)runCatching{InvoiceMath.lineTotal(quantity,unitPrice)}.getOrNull()else null
     val totals=runCatching{InvoiceMath.totals(lines.map{it.lineTotal},discount.toLongOrNull()?:0L,decimalValue(taxPercent)?:0.0,paid.toLongOrNull()?:0L)}.getOrNull();val needsPaymentAccount=(totals?.paid?:0L)>0L;val selectedAccount=accounts.firstOrNull{it.id==paymentAccountId}
     fun s(ar:String,en:String)=if(lang=="ar")ar else en
 
-    FlosiPage(s("إنشاء فاتورة","Create invoice"),s("بنود متعددة وحسابات دقيقة","Multiple items with precise totals"),onBack){
-        CardBox{Text(s("عملة الفاتورة: $currency","Invoice currency: $currency"),color=FlosiMuted);Text(s("تُحفظ العملة والضريبة مع الفاتورة نفسها حتى تبقى الأرقام ثابتة عند تغيير إعدادات التطبيق.","Currency and tax are stored with the invoice so totals remain stable when app settings change."),color=FlosiMuted)}
+    FlosiPage(s("إنشاء فاتورة","Create invoice"),s("بيع أو شراء ببنود وحسابات دقيقة","Sale or purchase with precise item totals"),onBack){
+        CardBox{
+            Text(s("نوع الفاتورة","Invoice type"),color=FlosiText)
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                FilterChip(invoiceType=="sale",{invoiceType="sale";paymentAccountId=null;error=null},{Text(s("بيع / أستلم","Sale / receive"))})
+                FilterChip(invoiceType=="purchase",{invoiceType="purchase";paymentAccountId=null;error=null},{Text(s("شراء / أدفع","Purchase / pay"))})
+            }
+            Text(s("عملة الفاتورة: $currency","Invoice currency: $currency"),color=FlosiMuted)
+            Text(s("تُحفظ العملة والضريبة مع الفاتورة نفسها حتى تبقى الأرقام ثابتة عند تغيير إعدادات التطبيق.","Currency and tax are stored with the invoice so totals remain stable when app settings change."),color=FlosiMuted)
+        }
         CardBox{
             Text(s("إضافة بند","Add item"),color=FlosiText)
             OutlinedTextField(title,{title=it;error=null},Modifier.fillMaxWidth(),label={Text(s("البند","Item"))})
@@ -42,15 +51,24 @@ fun CreateInvoiceScreen(onBack:()->Unit){
         CardBox{
             OutlinedTextField(discount,{discount=it.filter(Char::isDigit);error=null},Modifier.fillMaxWidth(),label={Text(s("الخصم ($currency)","Discount ($currency)"))})
             OutlinedTextField(taxPercent,{taxPercent=decimalInput(it);error=null},Modifier.fillMaxWidth(),label={Text(s("الضريبة %","Tax %"))})
-            OutlinedTextField(paid,{paid=it.filter(Char::isDigit);error=null},Modifier.fillMaxWidth(),label={Text(s("المدفوع الآن ($currency)","Paid now ($currency)"))})
-            if(totals!=null){Metric(s("المجموع الفرعي","Subtotal"),moneyText(totals.subtotal,currency),FlosiText);if(totals.discount>0L)ActionRow(s("الخصم","Discount"),"",moneyText(totals.discount,currency),FlosiRed);if(totals.taxAmount>0L)ActionRow(s("الضريبة","Tax"),"${taxPercent}%",moneyText(totals.taxAmount,currency),FlosiOrange);Metric(s("الإجمالي النهائي","Grand total"),moneyText(totals.total,currency),FlosiPurple);ActionRow(s("المدفوع","Paid"),"",moneyText(totals.paid,currency),FlosiGreen);ActionRow(s("المتبقي","Remaining"),"",moneyText(totals.remaining,currency),if(totals.remaining>0L)FlosiOrange else FlosiGreen)}
+            OutlinedTextField(paid,{paid=it.filter(Char::isDigit);error=null},Modifier.fillMaxWidth(),label={Text(if(invoiceType=="sale")s("المقبوض الآن ($currency)","Received now ($currency)") else s("المدفوع الآن ($currency)","Paid now ($currency)"))})
+            if(totals!=null){Metric(s("المجموع الفرعي","Subtotal"),moneyText(totals.subtotal,currency),FlosiText);if(totals.discount>0L)ActionRow(s("الخصم","Discount"),"",moneyText(totals.discount,currency),FlosiRed);if(totals.taxAmount>0L)ActionRow(s("الضريبة","Tax"),"${taxPercent}%",moneyText(totals.taxAmount,currency),FlosiOrange);Metric(s("الإجمالي النهائي","Grand total"),moneyText(totals.total,currency),FlosiPurple);ActionRow(if(invoiceType=="sale")s("المقبوض","Received") else s("المدفوع","Paid"),"",moneyText(totals.paid,currency),FlosiGreen);ActionRow(s("المتبقي","Remaining"),"",moneyText(totals.remaining,currency),if(totals.remaining>0L)FlosiOrange else FlosiGreen)}
             else if(lines.isNotEmpty())Text(s("راجع الخصم والضريبة والمدفوع: الخصم لا يتجاوز المجموع والمدفوع لا يتجاوز الإجمالي.","Review discount, tax and paid amount: discount cannot exceed subtotal and paid cannot exceed total."),color=FlosiRed)
         }
         if(needsPaymentAccount)CardBox{
-            Text(s("حساب استلام الدفعة","Payment receiving account"),color=FlosiText);Text(s("المدفوع الآن سيُسجّل كحركة مالية فعلية ويزيد رصيد هذا الحساب.","The paid amount will be recorded as a real financial transaction and increase this account balance."),color=FlosiMuted)
+            Text(if(invoiceType=="sale")s("حساب استلام الدفعة","Receiving account") else s("حساب دفع الفاتورة","Payment account"),color=FlosiText)
+            Text(if(invoiceType=="sale")s("المقبوض الآن سيُسجّل كدخل فعلي ويزيد رصيد هذا الحساب.","The received amount will be recorded as real income and increase this account balance.") else s("المدفوع الآن سيُسجّل كمصروف فعلي ويُنقص رصيد هذا الحساب.","The paid amount will be recorded as a real expense and reduce this account balance."),color=FlosiMuted)
             Box{OutlinedButton(onClick={accountMenu=true},modifier=Modifier.fillMaxWidth()){Text(selectedAccount?.let{"${it.name} • ${it.currency}"}?:s("اختر الحساب","Choose account"))};DropdownMenu(accountMenu,{accountMenu=false}){accounts.forEach{account->DropdownMenuItem(text={Text("${account.name} • ${account.currency}")},onClick={paymentAccountId=account.id;accountMenu=false;error=null})}}}
         }
         error?.let{Text(it,color=FlosiRed)}
-        Button(onClick={val calculated=totals?:return@Button;if(calculated.paid>0L&&paymentAccountId==null){error=s("اختر حساب استلام الدفعة","Choose the payment receiving account");return@Button};val number="F-${System.currentTimeMillis().toString().takeLast(6)}";val invoice=InvoiceEntity(number=number,currency=currency,subtotal=calculated.subtotal,discount=calculated.discount,taxPercent=decimalValue(taxPercent)?:0.0,taxAmount=calculated.taxAmount,total=calculated.total,paidAmount=calculated.paid,status=calculated.status);val items=lines.map{line->InvoiceItemEntity(invoiceId=0,title=line.title,quantity=line.quantity,unitPrice=line.unitPrice,lineTotal=line.lineTotal)};saving=true;error=null;vm.create(invoice,items,paymentAccountId){id,message->saving=false;if(id!=null)onBack()else error=message?:s("تعذر حفظ الفاتورة","Could not save invoice")}},enabled=!saving&&lines.isNotEmpty()&&totals!=null&&(!needsPaymentAccount||paymentAccountId!=null),modifier=Modifier.fillMaxWidth()){if(saving)CircularProgressIndicator(strokeWidth=2.dp)else Text(flosiText("save"))}
+        Button(onClick={
+            val calculated=totals?:return@Button
+            if(calculated.paid>0L&&paymentAccountId==null){error=if(invoiceType=="sale")s("اختر حساب استلام الدفعة","Choose the receiving account") else s("اختر حساب دفع الفاتورة","Choose the payment account");return@Button}
+            val number="${if(invoiceType=="sale")"S" else "P"}-${System.currentTimeMillis()}"
+            val invoice=InvoiceEntity(number=number,type=invoiceType,currency=currency,subtotal=calculated.subtotal,discount=calculated.discount,taxPercent=decimalValue(taxPercent)?:0.0,taxAmount=calculated.taxAmount,total=calculated.total,paidAmount=calculated.paid,status=calculated.status)
+            val items=lines.map{line->InvoiceItemEntity(invoiceId=0,title=line.title,quantity=line.quantity,unitPrice=line.unitPrice,lineTotal=line.lineTotal)}
+            saving=true;error=null
+            vm.create(invoice,items,paymentAccountId){id,message->saving=false;if(id!=null)onBack()else error=message?:s("تعذر حفظ الفاتورة","Could not save invoice")}
+        },enabled=!saving&&lines.isNotEmpty()&&totals!=null&&(!needsPaymentAccount||paymentAccountId!=null),modifier=Modifier.fillMaxWidth()){if(saving)CircularProgressIndicator(strokeWidth=2.dp)else Text(flosiText("save"))}
     }
 }
