@@ -22,11 +22,19 @@ class FlosiApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        database = FlosiDatabase.get(this)
         preferences = FlosiPreferences(this)
-        repository = FinanceRepository(database,preferences)
-
-        appScope.launch { repository.seedIfEmpty() }
+        openFinanceLayer(seed = true)
         FlosiWorkScheduler.ensureScheduled(this)
+    }
+
+    fun reloadAfterRestore() {
+        FlosiDatabase.resetInstance()
+        openFinanceLayer(seed = false)
+    }
+
+    private fun openFinanceLayer(seed:Boolean) {
+        database = FlosiDatabase.get(this)
+        repository = FinanceRepository(database,preferences)
+        if(seed) appScope.launch { repository.seedIfEmpty() }
     }
 }
