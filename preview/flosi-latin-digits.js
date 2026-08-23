@@ -84,4 +84,11 @@ document.addEventListener('input',e=>{
   }
 },true);
 window.FLOSI_LATINIZE_DIGITS=normalizeAll;
+
+if(!document.querySelector('script[data-flosi-preview-state]')){
+  const s=document.createElement('script');
+  s.src='flosi-preview-state.js?v=20260823-state5';
+  s.dataset.flosiPreviewState='1';
+  document.body.appendChild(s);
+}
 })();
