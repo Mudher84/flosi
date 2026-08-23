@@ -7,6 +7,8 @@ import com.flosi.app.data.local.dao.TransactionWithNames
 import com.flosi.app.data.local.entity.*
 import com.flosi.app.data.repository.FinanceRepository
 import com.flosi.app.domain.model.*
+import com.flosi.app.finance.CurrencyConverter
+import com.flosi.app.settings.FlosiPreferencesState
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -18,6 +20,18 @@ data class HomeUiState(
     val reservedGoals: Long = 0,
     val loading: Boolean = true
 )
+
+data class BudgetProgress(
+    val budget: BudgetEntity,
+    val spent: Long,
+    val remaining: Long,
+    val overAmount: Long,
+    val usagePercent: Float,
+    val missingCurrencies: List<String>
+) {
+    val isOver: Boolean get() = overAmount > 0L
+    val warningReached: Boolean get() = usagePercent >= budget.warningPercent
+}
 
 class HomeViewModel(private val repo: FinanceRepository): ViewModel() {
     val state: StateFlow<HomeUiState> = combine(repo.dashboard,repo.transactions,repo.topExpenseCategories,repo.commitments,repo.goals) { dash, tx, cats, commitments, goals ->
@@ -65,10 +79,47 @@ class PlanningViewModel(private val repo: FinanceRepository): ViewModel() {
     val commitments=repo.commitments.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
     val budgets=repo.budgets.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
     val goals=repo.goals.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
+    val accounts=repo.accounts.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
+    val categories=repo.categories.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
+    val preferences=repo.preferenceState.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),FlosiPreferencesState())
     val topCategories=repo.topExpenseCategories.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
+
+    val budgetProgress: StateFlow<List<BudgetProgress>> = combine(repo.budgets,repo.transactions,repo.preferenceState) { budgetList,txList,prefs ->
+        budgetList.map { budget ->
+            val missing=linkedSetOf<String>()
+            val spent=txList.asSequence()
+                .filter { tx ->
+                    tx.kind=="expense" &&
+                        tx.occurredAt>=budget.periodStart && tx.occurredAt<=budget.periodEnd &&
+                        (budget.categoryId==null || tx.categoryId==budget.categoryId)
+                }
+                .mapNotNull { tx ->
+                    val converted=CurrencyConverter.convert(tx.amount,tx.accountCurrency,budget.currency,prefs.exchangeRates)
+                    if(converted==null) missing += CurrencyConverter.normalizeCode(tx.accountCurrency)
+                    converted
+                }
+                .sum()
+            val remaining=(budget.limitAmount-spent).coerceAtLeast(0L)
+            val over=(spent-budget.limitAmount).coerceAtLeast(0L)
+            val percent=if(budget.limitAmount>0L) spent.toFloat()*100f/budget.limitAmount.toFloat() else 0f
+            BudgetProgress(
+                budget=budget,
+                spent=spent,
+                remaining=remaining,
+                overAmount=over,
+                usagePercent=percent,
+                missingCurrencies=missing.filter{it!=budget.currency}.sorted()
+            )
+        }
+    }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
+
     fun addCommitment(item:CommitmentEntity)=viewModelScope.launch{repo.addCommitment(item)}
     fun addBudget(item:BudgetEntity)=viewModelScope.launch{repo.addBudget(item)}
     fun addGoal(item:GoalEntity)=viewModelScope.launch{repo.addGoal(item)}
+    fun reserveGoal(goalId:Long,amount:Long,onDone:(String?)->Unit={})=viewModelScope.launch{
+        val error=runCatching{repo.reserveForGoal(goalId,amount)}.exceptionOrNull()?.message
+        onDone(error)
+    }
 }
 
 class InvoicesViewModel(private val repo: FinanceRepository): ViewModel() {
