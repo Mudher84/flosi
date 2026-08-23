@@ -5,8 +5,12 @@ data class DashboardSnapshot(
     val monthIncome: Long = 0,
     val monthExpense: Long = 0,
     val todayIncome: Long = 0,
-    val todayExpense: Long = 0
-)
+    val todayExpense: Long = 0,
+    val baseCurrency: String = "IQD",
+    val unconvertedCurrencies: List<String> = emptyList()
+) {
+    val hasUnconvertedCurrencies: Boolean get() = unconvertedCurrencies.isNotEmpty()
+}
 
 data class CategorySpend(
     val categoryId: Long?,
