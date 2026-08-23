@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
 import com.flosi.app.i18n.FlosiLocales
+import com.flosi.app.i18n.flosiText
 import com.flosi.app.settings.FlosiPreferencesState
 import com.flosi.app.ui.components.*
 import com.flosi.app.ui.viewmodel.rememberFlosiPreferences
@@ -24,10 +25,9 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
  var languageMenu by remember{mutableStateOf(false)}
  val selectedLocale=FlosiLocales.get(state.language)
 
- FlosiPage("العملة واللغة","إعدادات محفوظة ومحرك تحويل واضح",onBack){
+ FlosiPage(flosiText("language_currency"),flosiText("all_languages_ready"),onBack){
   CardBox{
-   Text("لغة التطبيق")
-   Text("تغيير اللغة يطبق اتجاه RTL/LTR على التطبيق كله فوراً.",color=FlosiMuted)
+   Text(flosiText("choose_language"))
    Box(Modifier.fillMaxWidth()){
     OutlinedButton(onClick={languageMenu=true},modifier=Modifier.fillMaxWidth()){
      Text("${selectedLocale.label}  •  ${selectedLocale.localeTag}")
@@ -36,43 +36,52 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
      FlosiLocales.all.forEach{locale->
       DropdownMenuItem(
        text={Text(locale.label)},
-       onClick={
-        languageMenu=false
-        scope.launch{prefs.setLanguage(locale.code)}
-       },
+       onClick={languageMenu=false;scope.launch{prefs.setLanguage(locale.code)}},
        trailingIcon={if(state.language==locale.code){Text("✓",color=FlosiPurple)}}
       )
      }
     }
    }
-   Text("اللغات المتاحة: ${FlosiLocales.all.size}",color=FlosiMuted)
+   Text("${FlosiLocales.all.size} languages",color=FlosiMuted)
   }
 
   CardBox{
-   Text("عملة التقارير الأساسية")
-   Text("اختيار العملة هنا لا يغيّر عملة الحساب نفسه؛ فقط يوحّد التقارير بعد التحويل.",color=FlosiMuted)
-   currencies.chunked(5).forEach{row->Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach{v->FilterChip(state.currency==v,{scope.launch{prefs.setCurrency(v)}},{Text(v)})}}}
+   Text(flosiText("base_currency"))
+   currencies.chunked(5).forEach{row->
+    Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
+     row.forEach{v->FilterChip(state.currency==v,{scope.launch{prefs.setCurrency(v)}},{Text(v)})}
+    }
+   }
   }
 
   CardBox{
-   Text("أسعار التحويل")
-   Text("Flosi لن يجمع عملتين مختلفتين بدون سعر معروف. أدخل سعر يدوي موثوق عند استخدام أكثر من عملة.",color=FlosiMuted)
-   Text("1 من")
-   Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){currencies.filter{it!=state.currency}.take(7).forEach{v->FilterChip(rateCurrency==v,{rateCurrency=v},{Text(v)})}}
-   OutlinedTextField(rateText,{rateText=it.filter{ch->ch.isDigit()||ch=='.'||ch==','}},Modifier.fillMaxWidth(),label={Text("يساوي كم ${state.currency}")},singleLine=true)
+   Text(flosiText("exchange_rates"))
+   Text("1 ${rateCurrency}",color=FlosiMuted)
+   Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
+    currencies.filter{it!=state.currency}.take(7).forEach{v->FilterChip(rateCurrency==v,{rateCurrency=v},{Text(v)})}
+   }
+   OutlinedTextField(
+    rateText,
+    {rateText=it.filter{ch->ch.isDigit()||ch=='.'||ch==','}},
+    Modifier.fillMaxWidth(),
+    label={Text("${rateCurrency} → ${state.currency}")},
+    singleLine=true
+   )
    Button(
-    onClick={scope.launch{val ok=prefs.setExchangeRate(rateCurrency,state.currency,rateText);message=if(ok)"تم حفظ سعر $rateCurrency/${state.currency}" else "تحقق من السعر";if(ok)rateText=""}},
+    onClick={scope.launch{
+     val ok=prefs.setExchangeRate(rateCurrency,state.currency,rateText)
+     message=if(ok) flosiText("done") else "Invalid rate"
+     if(ok)rateText=""
+    }},
     enabled=rateText.isNotBlank(),modifier=Modifier.fillMaxWidth()
-   ){Text("حفظ سعر التحويل")}
+   ){Text(flosiText("save_rate"))}
   }
 
   val saved=state.exchangeRates.mapNotNull(CurrencyConverter::parseRate).sortedBy{it.from}
   CardBox{
-   Text("الأسعار المحفوظة")
-   if(saved.isEmpty()) Text("لا توجد أسعار مضافة بعد",color=FlosiMuted)
-   saved.forEach{r->
-    ActionRow("1 ${r.from}","سعر يدوي", "${r.value.stripTrailingZeros().toPlainString()} ${r.to}",FlosiPurple)
-   }
+   Text(flosiText("saved_rates"))
+   if(saved.isEmpty()) Text(flosiText("no_data"),color=FlosiMuted)
+   saved.forEach{r->ActionRow("1 ${r.from}","FX", "${r.value.stripTrailingZeros().toPlainString()} ${r.to}",FlosiPurple)}
   }
   if(message.isNotBlank()) Text(message,color=FlosiGreen)
  }
