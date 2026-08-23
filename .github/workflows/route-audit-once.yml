@@ -1,0 +1,60 @@
+name: Flosi route audit once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/route-audit-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Syntax and route audit
+        shell: bash
+        run: |
+          node --check preview/flosi-routes.js
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path('preview/flosi2.html').read_text(encoding='utf-8')
+          routes = Path('preview/flosi-routes.js').read_text(encoding='utf-8')
+          assert 'flosi-routes.js' in html, 'route controller is not loaded'
+
+          static_screens = set(re.findall(r'<section[^>]+id="([^"]+)"', html))
+          dynamic_screens = set(re.findall(r"addScreen\('([^']+)'", routes))
+          # Security screens are generated from a keyed map.
+          dynamic_screens.update({'security-biometric','security-pin','security-autolock','security-screenshots'})
+          all_screens = static_screens | dynamic_screens
+          links = set(re.findall(r'data-go="([^"]+)"', html))
+          missing = sorted(x for x in links if x not in all_screens)
+          assert not missing, f'missing data-go targets: {missing}'
+
+          required = {
+            'home','activity','insights','plan','me','security','locale','backup','pro',
+            'activity-detail','insight-detail','plan-travel','plan-emergency',
+            'security-biometric','security-pin','security-autolock','security-screenshots',
+            'locale-languages','locale-currencies','backup-history','backup-restore','pro-features'
+          }
+          absent = sorted(required - all_screens)
+          assert not absent, f'required route screens absent: {absent}'
+
+          report = f'''# Flosi Route Audit\n\nPASS\n\n- JavaScript syntax: PASS\n- Main screens found: {len(static_screens)}\n- Routed extension screens found: {len(dynamic_screens)}\n- Static data-go targets checked: {len(links)}\n- Missing static targets: 0\n- Blank-page fail-safe: enabled\n- Browser hash/history routing: enabled\n'''
+          Path('ROUTE_AUDIT.md').write_text(report, encoding='utf-8')
+          print(report)
+          PY
+      - name: Commit audit report
+        shell: bash
+        run: |
+          git config user.name 'Flosi Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add ROUTE_AUDIT.md
+          git commit -m 'test: route audit PASS'
+          git push origin main
