@@ -9,15 +9,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import com.flosi.app.auth.FlosiAuthGate
+import com.flosi.app.i18n.FlosiLocales
 import com.flosi.app.security.BiometricGate
+import com.flosi.app.settings.FlosiPreferencesState
 import com.flosi.app.ui.navigation.FlosiApp
 import com.flosi.app.ui.theme.FlosiTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class MainActivity : FragmentActivity() {
     private var unlocked by mutableStateOf(false)
@@ -38,23 +42,26 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            FlosiTheme {
-                FlosiAuthGate {
-                    if (unlocked || !gateEnabled) {
-                        FlosiApp()
-                    } else {
-                        LaunchedEffect(gateEnabled, unlocked) {
-                            if (gateEnabled && !unlocked && !authStarted) launchBiometric()
+            val app = application as FlosiApplication
+            val prefs by app.preferences.state.collectAsState(initial = FlosiPreferencesState())
+            val locale = remember(prefs.language) { FlosiLocales.get(prefs.language) }
+            LaunchedEffect(locale.code) { Locale.setDefault(locale.locale()) }
+
+            CompositionLocalProvider(LocalLayoutDirection provides locale.layoutDirection) {
+                FlosiTheme {
+                    FlosiAuthGate {
+                        if (unlocked || !gateEnabled) {
+                            FlosiApp()
+                        } else {
+                            LaunchedEffect(gateEnabled, unlocked) {
+                                if (gateEnabled && !unlocked && !authStarted) launchBiometric()
+                            }
+                            LockedScreen { launchBiometric() }
                         }
-                        LockedScreen { launchBiometric() }
                     }
                 }
             }
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
     }
 
     private fun launchBiometric() {
@@ -80,7 +87,7 @@ private fun LockedScreen(onUnlock: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("فلوسي", style = MaterialTheme.typography.headlineLarge)
+            Text("Flosi", style = MaterialTheme.typography.headlineLarge)
             Text("التطبيق مقفول")
             Spacer(Modifier.height(16.dp))
             Button(onClick = onUnlock) { Text("فتح بالبصمة أو الوجه") }
