@@ -5,39 +5,26 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.flosi.app.i18n.LocalFlosiLanguage
+import com.flosi.app.i18n.flosiText
+import com.flosi.app.i18n.localizedLegacyText
 import com.flosi.app.ui.components.*
 import com.flosi.app.ui.viewmodel.AccountsViewModel
 import com.flosi.app.ui.viewmodel.flosiViewModel
 
 @Composable
 fun AccountEditScreen(onBack:()->Unit){
-    val vm:AccountsViewModel=flosiViewModel()
-    var name by remember{mutableStateOf("")}
-    var balance by remember{mutableStateOf("")}
-    var type by remember{mutableStateOf("cash")}
-    var currency by remember{mutableStateOf("IQD")}
-
-    FlosiPage("إضافة حساب","حساب أو محفظة بعملة مستقلة",onBack){
-        OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("الاسم")})
-        OutlinedTextField(balance,{balance=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text("الرصيد الافتتاحي")})
-        Text("نوع الحساب")
+    val vm:AccountsViewModel=flosiViewModel();val lang=LocalFlosiLanguage.current
+    var name by remember{mutableStateOf("")};var balance by remember{mutableStateOf("")};var type by remember{mutableStateOf("cash")};var currency by remember{mutableStateOf("IQD")}
+    FlosiPage(localizedLegacyText("إضافة حساب"),localizedLegacyText("حساب أو محفظة بعملة مستقلة"),onBack){
+        OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text(if(lang=="ar")"الاسم" else "Name")})
+        OutlinedTextField(balance,{balance=it.filter(Char::isDigit)},Modifier.fillMaxWidth(),label={Text(if(lang=="ar")"الرصيد الافتتاحي" else "Opening balance")})
+        Text(localizedLegacyText("نوع الحساب"))
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
-            listOf("cash" to "نقدي","bank" to "مصرف","wallet" to "محفظة").forEach{(k,l)->
-                FilterChip(type==k,{type=k},{Text(l)})
-            }
+            listOf("cash" to flosiText("cash"),"bank" to flosiText("bank"),"wallet" to flosiText("wallet")).forEach{(k,l)->FilterChip(type==k,{type=k},{Text(l)})}
         }
-        Text("عملة الحساب")
-        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
-            listOf("IQD","USD","EUR","GBP").forEach{c->
-                FilterChip(currency==c,{currency=c},{Text(c)})
-            }
-        }
-        Button(
-            onClick={vm.add(name,type,balance.toLongOrNull()?:0,currency);onBack()},
-            enabled=name.isNotBlank(),
-            modifier=Modifier.fillMaxWidth()
-        ){
-            Text("حفظ")
-        }
+        Text(localizedLegacyText("عملة الحساب"))
+        Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){listOf("IQD","USD","EUR","GBP").forEach{c->FilterChip(currency==c,{currency=c},{Text(c)})}}
+        Button(onClick={vm.add(name,type,balance.toLongOrNull()?:0,currency);onBack()},enabled=name.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text(flosiText("save"))}
     }
 }
