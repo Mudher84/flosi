@@ -1,18 +1,25 @@
 package com.flosi.app.ui.screens.accounts
 
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import com.flosi.app.finance.CurrencyConverter
+import com.flosi.app.i18n.LocalFlosiLanguage
+import com.flosi.app.i18n.flosiText
 import com.flosi.app.settings.FlosiPreferencesState
 import com.flosi.app.ui.components.*
 import com.flosi.app.ui.viewmodel.AccountsViewModel
 import com.flosi.app.ui.viewmodel.flosiViewModel
 import com.flosi.app.ui.viewmodel.rememberFlosiPreferences
+import kotlinx.coroutines.launch
 
 @Composable
 fun AccountsScreen(onBack:()->Unit,onOpen:(Long)->Unit,onAdd:()->Unit){
  val vm:AccountsViewModel=flosiViewModel();val accounts by vm.accounts.collectAsState()
  val prefs=rememberFlosiPreferences();val settings by prefs.state.collectAsState(initial=FlosiPreferencesState())
+ val scope=rememberCoroutineScope();val lang=LocalFlosiLanguage.current
  val base=settings.currency
  val included=accounts.filter{it.includeInTotal}
  val converted=included.map{a->a to CurrencyConverter.convert(a.currentBalance,a.currency,base,settings.exchangeRates)}
@@ -20,29 +27,48 @@ fun AccountsScreen(onBack:()->Unit,onOpen:(Long)->Unit,onAdd:()->Unit){
  val total=converted.mapNotNull{it.second}.sum()
  val bankAccounts=accounts.filter{it.type.equals("bank",ignoreCase=true)}
 
- FlosiPage("الحسابات والمحافظ","أموالك موزعة بوضوح",onBack){
+ FlosiPage(flosiText("accounts"),flosiText("accounts_sub"),onBack){
   CardBox{
-   Metric("إجمالي السيولة",moneyText(total,base),FlosiPurple)
-   if(missing.isNotEmpty()) Text("غير محتسب: ${missing.joinToString()} — أضف سعر تحويل حتى يدخل بالإجمالي",color=FlosiOrange)
+   Metric(flosiText("total_liquidity"),moneyText(total,base),FlosiPurple)
+   if(missing.isNotEmpty()) Text(if(lang=="ar")"غير محتسب: ${missing.joinToString()} — أضف سعر تحويل حتى يدخل بالإجمالي" else "Excluded: ${missing.joinToString()} — add an exchange rate to include it in totals",color=FlosiOrange)
   }
 
-  SectionTitle("الحسابات","+ حساب",onAdd)
+  SectionTitle(flosiText("accounts"),flosiText("add_account"),onAdd)
   CardBox{
-   if(accounts.isEmpty()) Text("لا توجد حسابات بعد",color=FlosiMuted)
+   if(accounts.isEmpty()) Text(flosiText("no_data"),color=FlosiMuted)
    accounts.forEach{a->ActionRow(a.name,"${a.type} • ${a.currency}",moneyText(a.currentBalance,a.currency),FlosiPurple){onOpen(a.id)}}
   }
 
-  SectionTitle("الحسابات المصرفية المتصلة")
+  SectionTitle(flosiText("connected_banks"))
   CardBox{
-   Metric("المزامنة المصرفية",if(bankAccounts.isEmpty()) "أضف حساباً مصرفياً" else "جاهزة للربط",if(bankAccounts.isEmpty()) FlosiOrange else FlosiGreen)
+   Metric(flosiText("bank_sync"),if(settings.bankSyncEnabled)flosiText("enabled") else flosiText("disabled"),if(settings.bankSyncEnabled)FlosiGreen else FlosiOrange)
+   BankOptionRow(flosiText("auto_transactions"),settings.bankSyncEnabled,bankAccounts.isNotEmpty()){
+    scope.launch{prefs.setBankSyncEnabled(it)}
+   }
+   BankOptionRow(flosiText("salary_auto"),settings.salaryAutoAdd,settings.bankSyncEnabled&&bankAccounts.isNotEmpty()){
+    scope.launch{prefs.setSalaryAutoAdd(it)}
+   }
+   BankOptionRow(flosiText("review_before_add"),settings.bankReviewBeforeAdd,settings.bankSyncEnabled&&bankAccounts.isNotEmpty()){
+    scope.launch{prefs.setBankReviewBeforeAdd(it)}
+   }
    Text(
-    "عند ربط API رسمي للمصرف سيستقبل Flosi الحركات الجديدة فقط، يمنع تكرارها بمعرّف الحركة، ويميّز الراتب تلقائياً عن التحويلات والإيداعات الأخرى.",
+    if(bankAccounts.isEmpty()) {
+     if(lang=="ar") "أضف حساباً من نوع مصرف لتظهر خيارات الربط عند توفر API رسمي للمصرف." else "Add a bank-type account. Connection options become active when an official bank API is available."
+    } else flosiText("bank_sync_sub"),
     color=FlosiMuted
    )
    Text(
-    "لا يتم إنشاء دخل وهمي قبل وصول حركة مصرفية مؤكدة من مزود رسمي.",
+    if(lang=="ar") "لا ينشئ Flosi أي دخل قبل وصول حركة مصرفية مؤكدة. معرّف الحركة يمنع التكرار، والراتب يُصنف فقط بعد المطابقة." else "Flosi never creates income before a confirmed bank transaction arrives. Transaction IDs prevent duplicates and salary is classified only after matching.",
     color=FlosiPurple
    )
   }
+ }
+}
+
+@Composable
+private fun BankOptionRow(title:String,checked:Boolean,enabled:Boolean,onChange:(Boolean)->Unit){
+ Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+  Text(title,modifier=Modifier.weight(1f),color=if(enabled)FlosiText else FlosiMuted)
+  Switch(checked=checked,onCheckedChange=onChange,enabled=enabled)
  }
 }
