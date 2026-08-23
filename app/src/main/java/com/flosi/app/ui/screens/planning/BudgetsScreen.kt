@@ -42,8 +42,7 @@ fun BudgetsScreen(onBack:()->Unit,onDetail:()->Unit){
                     title=budget.title,
                     subtitle="$category • تنبيه ${budget.warningPercent}%",
                     value="${percent.toInt()}%",
-                    accent=tone,
-                    onClick=onDetail
+                    accent=tone
                 )
                 LinearProgressIndicator(
                     progress={ (percent/100f).coerceIn(0f,1f) },
