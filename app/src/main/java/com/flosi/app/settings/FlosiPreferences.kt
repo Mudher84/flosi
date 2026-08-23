@@ -17,7 +17,10 @@ data class FlosiPreferencesState(
     val hideRecents: Boolean = false,
     val dailySummaryEnabled: Boolean = true,
     val backupEnabled: Boolean = false,
-    val exchangeRates: Set<String> = emptySet()
+    val exchangeRates: Set<String> = emptySet(),
+    val bankSyncEnabled: Boolean = false,
+    val salaryAutoAdd: Boolean = false,
+    val bankReviewBeforeAdd: Boolean = true
 )
 
 class FlosiPreferences(private val context: Context) {
@@ -29,30 +32,36 @@ class FlosiPreferences(private val context: Context) {
         val dailySummary = booleanPreferencesKey("daily_summary")
         val backup = booleanPreferencesKey("backup_enabled")
         val exchangeRates = stringSetPreferencesKey("exchange_rates")
+        val bankSync = booleanPreferencesKey("bank_sync_enabled")
+        val salaryAuto = booleanPreferencesKey("bank_salary_auto_add")
+        val bankReview = booleanPreferencesKey("bank_review_before_add")
     }
 
     val state: Flow<FlosiPreferencesState> = context.flosiDataStore.data.map { p ->
-        val storedLanguage = p[Keys.language]
+        val rawLanguage = p[Keys.language] ?: "ar"
         FlosiPreferencesState(
             currency=p[Keys.currency] ?: "IQD",
-            language=if (FlosiLocales.isSupported(storedLanguage)) storedLanguage!! else "ar",
+            language=if(FlosiLocales.isSupported(rawLanguage)) rawLanguage else "ar",
             biometricLock=p[Keys.biometric] ?: false,
             hideRecents=p[Keys.hideRecents] ?: false,
             dailySummaryEnabled=p[Keys.dailySummary] ?: true,
             backupEnabled=p[Keys.backup] ?: false,
-            exchangeRates=p[Keys.exchangeRates]?.toSet() ?: emptySet()
+            exchangeRates=p[Keys.exchangeRates]?.toSet() ?: emptySet(),
+            bankSyncEnabled=p[Keys.bankSync] ?: false,
+            salaryAutoAdd=p[Keys.salaryAuto] ?: false,
+            bankReviewBeforeAdd=p[Keys.bankReview] ?: true
         )
     }
 
     suspend fun setCurrency(v:String)=context.flosiDataStore.edit{it[Keys.currency]=CurrencyConverter.normalizeCode(v)}
-    suspend fun setLanguage(v:String) {
-        require(FlosiLocales.isSupported(v)) { "Unsupported language: $v" }
-        context.flosiDataStore.edit { it[Keys.language] = v }
-    }
+    suspend fun setLanguage(v:String){require(FlosiLocales.isSupported(v)){"Unsupported locale: $v"};context.flosiDataStore.edit{it[Keys.language]=v}}
     suspend fun setBiometric(v:Boolean)=context.flosiDataStore.edit{it[Keys.biometric]=v}
     suspend fun setHideRecents(v:Boolean)=context.flosiDataStore.edit{it[Keys.hideRecents]=v}
     suspend fun setDailySummary(v:Boolean)=context.flosiDataStore.edit{it[Keys.dailySummary]=v}
     suspend fun setBackup(v:Boolean)=context.flosiDataStore.edit{it[Keys.backup]=v}
+    suspend fun setBankSyncEnabled(v:Boolean)=context.flosiDataStore.edit{it[Keys.bankSync]=v}
+    suspend fun setSalaryAutoAdd(v:Boolean)=context.flosiDataStore.edit{it[Keys.salaryAuto]=v}
+    suspend fun setBankReviewBeforeAdd(v:Boolean)=context.flosiDataStore.edit{it[Keys.bankReview]=v}
 
     suspend fun setExchangeRate(from:String,to:String,rawRate:String):Boolean {
         val encoded=CurrencyConverter.encodeRate(from,to,rawRate) ?: return false
