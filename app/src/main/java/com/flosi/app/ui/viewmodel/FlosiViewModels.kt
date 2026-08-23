@@ -14,6 +14,8 @@ data class HomeUiState(
     val dashboard: DashboardSnapshot = DashboardSnapshot(),
     val recent: List<TransactionWithNames> = emptyList(),
     val topCategories: List<CategorySpend> = emptyList(),
+    val reservedCommitments: Long = 0,
+    val reservedGoals: Long = 0,
     val loading: Boolean = true
 )
 
@@ -21,9 +23,23 @@ class HomeViewModel(private val repo: FinanceRepository): ViewModel() {
     val state: StateFlow<HomeUiState> = combine(
         repo.dashboard,
         repo.transactions,
-        repo.topExpenseCategories
-    ) { dash, tx, cats ->
-        HomeUiState(dash, tx.take(5), cats, false)
+        repo.topExpenseCategories,
+        repo.commitments,
+        repo.goals
+    ) { dash, tx, cats, commitments, goals ->
+        val commitmentReserve = commitments.sumOf { it.amount.coerceAtLeast(0L) }
+        val goalReserve = goals.sumOf { goal ->
+            val target = goal.targetAmount.coerceAtLeast(0L)
+            goal.savedAmount.coerceAtLeast(0L).coerceAtMost(target)
+        }
+        HomeUiState(
+            dashboard = dash,
+            recent = tx.take(5),
+            topCategories = cats,
+            reservedCommitments = commitmentReserve,
+            reservedGoals = goalReserve,
+            loading = false
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 }
 
