@@ -99,16 +99,26 @@ class TransactionsViewModel(private val repo: FinanceRepository): ViewModel() {
 
 class PeopleViewModel(private val repo: FinanceRepository): ViewModel() {
     val people = repo.people.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
-    fun add(name:String,phone:String,balance:Long)=viewModelScope.launch { repo.addPerson(PersonEntity(name=name,phone=phone,openingBalance=balance,currentBalance=balance)) }
+    fun add(name:String,phone:String,balance:Long,onDone:(String?)->Unit={})=viewModelScope.launch {
+        val error=runCatching{
+            require(name.isNotBlank()){ "الاسم مطلوب" }
+            repo.addPerson(PersonEntity(name=name.trim(),phone=phone.trim(),openingBalance=balance,currentBalance=balance))
+        }.exceptionOrNull()?.message
+        onDone(error)
+    }
 }
 
 class AccountsViewModel(private val repo: FinanceRepository): ViewModel() {
     val accounts=repo.accounts.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
-    fun add(name:String,type:String,balance:Long,currency:String)=viewModelScope.launch {
-        repo.addAccount(AccountEntity(name=name,type=type,currency=currency,openingBalance=balance,currentBalance=balance))
+    fun add(name:String,type:String,balance:Long,currency:String,onDone:(String?)->Unit={})=viewModelScope.launch {
+        val error=runCatching{
+            require(name.isNotBlank()){ "اسم الحساب مطلوب" }
+            repo.addAccount(AccountEntity(name=name.trim(),type=type,currency=currency,openingBalance=balance,currentBalance=balance))
+        }.exceptionOrNull()?.message
+        onDone(error)
     }
-    fun transfer(from:Long,to:Long,amount:Long,fee:Long=0,onDone:(String?)->Unit={})=viewModelScope.launch {
-        val error=runCatching{repo.transfer(from,to,amount,fee)}.exceptionOrNull()?.message
+    fun transfer(from:Long,to:Long,amount:Long,fee:Long=0,note:String="",onDone:(String?)->Unit={})=viewModelScope.launch {
+        val error=runCatching{repo.transfer(from,to,amount,fee,note.trim())}.exceptionOrNull()?.message
         onDone(error)
     }
 }
@@ -119,8 +129,9 @@ class EntryViewModel(private val repo: FinanceRepository): ViewModel() {
     val categories=repo.categories.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
     fun save(kind:String, amount:Long, title:String, note:String,accountId:Long, personId:Long?, categoryId:Long?, onDone:(String?)->Unit={}) = viewModelScope.launch {
         val error=runCatching{
-            require(amount>0)
-            repo.addTransaction(TransactionEntity(kind=kind,amount=amount,title=title,note=note,accountId=accountId,personId=personId,categoryId=categoryId))
+            require(amount>0){ "المبلغ يجب أن يكون أكبر من صفر" }
+            require(title.isNotBlank()){ "البيان مطلوب" }
+            repo.addTransaction(TransactionEntity(kind=kind,amount=amount,title=title.trim(),note=note.trim(),accountId=accountId,personId=personId,categoryId=categoryId))
         }.exceptionOrNull()?.message
         onDone(error)
     }
@@ -138,6 +149,7 @@ class PlanningViewModel(private val repo: FinanceRepository): ViewModel() {
     val budgetProgress: StateFlow<List<BudgetProgress>> = combine(repo.budgets,repo.transactions,repo.preferenceState) { budgetList,txList,prefs ->
         budgetList.map { budget ->
             val missing=linkedSetOf<String>()
+            val budgetCurrency=CurrencyConverter.normalizeCode(budget.currency)
             val spent=txList.asSequence()
                 .filter { tx ->
                     tx.kind=="expense" &&
@@ -145,21 +157,21 @@ class PlanningViewModel(private val repo: FinanceRepository): ViewModel() {
                         (budget.categoryId==null || tx.categoryId==budget.categoryId)
                 }
                 .mapNotNull { tx ->
-                    val converted=CurrencyConverter.convert(tx.amount,tx.accountCurrency,budget.currency,prefs.exchangeRates)
+                    val converted=CurrencyConverter.convert(tx.amount,tx.accountCurrency,budgetCurrency,prefs.exchangeRates)
                     if(converted==null) missing += CurrencyConverter.normalizeCode(tx.accountCurrency)
                     converted
                 }
                 .sum()
             val remaining=(budget.limitAmount-spent).coerceAtLeast(0L)
             val over=(spent-budget.limitAmount).coerceAtLeast(0L)
-            val percent=if(budget.limitAmount>0L) spent.toFloat()*100f/budget.limitAmount.toFloat() else 0f
+            val percent=if(budget.limitAmount>0L) spent.toDouble()*100.0/budget.limitAmount.toDouble() else 0.0
             BudgetProgress(
-                budget=budget,
+                budget=budget.copy(currency=budgetCurrency),
                 spent=spent,
                 remaining=remaining,
                 overAmount=over,
-                usagePercent=percent,
-                missingCurrencies=missing.filter{it!=budget.currency}.sorted()
+                usagePercent=percent.coerceAtMost(Float.MAX_VALUE.toDouble()).toFloat(),
+                missingCurrencies=missing.filter{it!=budgetCurrency}.sorted()
             )
         }
     }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
@@ -172,8 +184,14 @@ class PlanningViewModel(private val repo: FinanceRepository): ViewModel() {
         val error=runCatching{repo.payCommitment(id)}.exceptionOrNull()?.message
         onDone(error)
     }
-    fun addBudget(item:BudgetEntity)=viewModelScope.launch{repo.addBudget(item)}
-    fun addGoal(item:GoalEntity)=viewModelScope.launch{repo.addGoal(item)}
+    fun addBudget(item:BudgetEntity,onDone:(String?)->Unit={})=viewModelScope.launch{
+        val error=runCatching{repo.addBudget(item)}.exceptionOrNull()?.message
+        onDone(error)
+    }
+    fun addGoal(item:GoalEntity,onDone:(String?)->Unit={})=viewModelScope.launch{
+        val error=runCatching{repo.addGoal(item)}.exceptionOrNull()?.message
+        onDone(error)
+    }
     fun reserveGoal(goalId:Long,amount:Long,onDone:(String?)->Unit={})=viewModelScope.launch{
         val error=runCatching{repo.reserveForGoal(goalId,amount)}.exceptionOrNull()?.message
         onDone(error)
@@ -191,8 +209,17 @@ class InvoicesViewModel(private val repo: FinanceRepository): ViewModel() {
 
 class CategoriesViewModel(private val repo: FinanceRepository): ViewModel() {
     val categories=repo.categories.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
-    fun add(name:String,kind:String)=viewModelScope.launch{repo.addCategory(CategoryEntity(name=name,kind=kind))}
-    fun archive(id:Long)=viewModelScope.launch{repo.archiveCategory(id)}
+    fun add(name:String,kind:String,onDone:(String?)->Unit={})=viewModelScope.launch{
+        val error=runCatching{
+            require(name.isNotBlank()){ "اسم التصنيف مطلوب" }
+            repo.addCategory(CategoryEntity(name=name.trim(),kind=kind))
+        }.exceptionOrNull()?.message
+        onDone(error)
+    }
+    fun archive(id:Long,onDone:(String?)->Unit={})=viewModelScope.launch{
+        val error=runCatching{repo.archiveCategory(id)}.exceptionOrNull()?.message
+        onDone(error)
+    }
 }
 
 class SearchViewModel(private val repo: FinanceRepository): ViewModel() {
