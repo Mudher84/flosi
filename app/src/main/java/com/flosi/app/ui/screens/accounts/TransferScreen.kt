@@ -62,7 +62,7 @@ fun TransferScreen(onBack:()->Unit){
                 val source=from ?: return@Button
                 val target=to ?: return@Button
                 saving=true;error=null
-                vm.transfer(source,target,amountLong,feeLong){message->
+                vm.transfer(source,target,amountLong,feeLong,note){message->
                     saving=false
                     if(message==null) onBack() else error=message
                 }
