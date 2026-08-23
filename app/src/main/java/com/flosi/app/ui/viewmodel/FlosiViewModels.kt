@@ -91,7 +91,10 @@ class TransactionsViewModel(private val repo: FinanceRepository): ViewModel() {
         if(q.isBlank()) list else list.filter { listOf(it.title,it.note,it.accountName,it.personName.orEmpty(),it.categoryName.orEmpty()).joinToString(" ").contains(q,ignoreCase=true) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     fun setSearch(v:String){ search.value=v }
-    fun delete(id:Long)=viewModelScope.launch { repo.deleteTransaction(id) }
+    fun delete(id:Long,onDone:(String?)->Unit={})=viewModelScope.launch {
+        val error=runCatching{repo.deleteTransaction(id)}.exceptionOrNull()?.message
+        onDone(error)
+    }
 }
 
 class PeopleViewModel(private val repo: FinanceRepository): ViewModel() {
@@ -104,17 +107,22 @@ class AccountsViewModel(private val repo: FinanceRepository): ViewModel() {
     fun add(name:String,type:String,balance:Long,currency:String)=viewModelScope.launch {
         repo.addAccount(AccountEntity(name=name,type=type,currency=currency,openingBalance=balance,currentBalance=balance))
     }
-    fun transfer(from:Long,to:Long,amount:Long,fee:Long=0)=viewModelScope.launch { repo.transfer(from,to,amount,fee) }
+    fun transfer(from:Long,to:Long,amount:Long,fee:Long=0,onDone:(String?)->Unit={})=viewModelScope.launch {
+        val error=runCatching{repo.transfer(from,to,amount,fee)}.exceptionOrNull()?.message
+        onDone(error)
+    }
 }
 
 class EntryViewModel(private val repo: FinanceRepository): ViewModel() {
     val accounts=repo.accounts.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
     val people=repo.people.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
     val categories=repo.categories.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
-    fun save(kind:String, amount:Long, title:String, note:String,accountId:Long, personId:Long?, categoryId:Long?, onDone:()->Unit={}) = viewModelScope.launch {
-        require(amount>0)
-        repo.addTransaction(TransactionEntity(kind=kind,amount=amount,title=title,note=note,accountId=accountId,personId=personId,categoryId=categoryId))
-        onDone()
+    fun save(kind:String, amount:Long, title:String, note:String,accountId:Long, personId:Long?, categoryId:Long?, onDone:(String?)->Unit={}) = viewModelScope.launch {
+        val error=runCatching{
+            require(amount>0)
+            repo.addTransaction(TransactionEntity(kind=kind,amount=amount,title=title,note=note,accountId=accountId,personId=personId,categoryId=categoryId))
+        }.exceptionOrNull()?.message
+        onDone(error)
     }
 }
 
@@ -156,7 +164,14 @@ class PlanningViewModel(private val repo: FinanceRepository): ViewModel() {
         }
     }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
 
-    fun addCommitment(item:CommitmentEntity)=viewModelScope.launch{repo.addCommitment(item)}
+    fun addCommitment(item:CommitmentEntity,onDone:(String?)->Unit={})=viewModelScope.launch{
+        val error=runCatching{repo.addCommitment(item)}.exceptionOrNull()?.message
+        onDone(error)
+    }
+    fun payCommitment(id:Long,onDone:(String?)->Unit={})=viewModelScope.launch{
+        val error=runCatching{repo.payCommitment(id)}.exceptionOrNull()?.message
+        onDone(error)
+    }
     fun addBudget(item:BudgetEntity)=viewModelScope.launch{repo.addBudget(item)}
     fun addGoal(item:GoalEntity)=viewModelScope.launch{repo.addGoal(item)}
     fun reserveGoal(goalId:Long,amount:Long,onDone:(String?)->Unit={})=viewModelScope.launch{
@@ -167,7 +182,11 @@ class PlanningViewModel(private val repo: FinanceRepository): ViewModel() {
 
 class InvoicesViewModel(private val repo: FinanceRepository): ViewModel() {
     val invoices=repo.invoices.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
-    fun create(invoice:InvoiceEntity,items:List<InvoiceItemEntity>,onDone:(Long)->Unit={})=viewModelScope.launch{onDone(repo.createInvoice(invoice,items))}
+    val accounts=repo.accounts.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5_000),emptyList())
+    fun create(invoice:InvoiceEntity,items:List<InvoiceItemEntity>,paymentAccountId:Long?,onDone:(Long?,String?)->Unit={_,_->})=viewModelScope.launch{
+        val result=runCatching{repo.createInvoice(invoice,items,paymentAccountId)}
+        onDone(result.getOrNull(),result.exceptionOrNull()?.message)
+    }
 }
 
 class CategoriesViewModel(private val repo: FinanceRepository): ViewModel() {
