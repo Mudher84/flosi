@@ -15,7 +15,7 @@ import com.flosi.app.data.local.entity.*
         CommitmentEntity::class, BudgetEntity::class, GoalEntity::class,
         InvoiceEntity::class, InvoiceItemEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class FlosiDatabase : RoomDatabase() {
@@ -39,6 +39,12 @@ abstract class FlosiDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE invoices ADD COLUMN currency TEXT NOT NULL DEFAULT 'IQD'")
+            }
+        }
+
         fun get(context: Context): FlosiDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -46,7 +52,7 @@ abstract class FlosiDatabase : RoomDatabase() {
                     FlosiDatabase::class.java,
                     "flosi.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { instance = it }
