@@ -3,6 +3,7 @@ package com.flosi.app.security
 import android.app.Activity
 import android.content.Context
 import android.os.SystemClock
+import android.util.Base64
 import android.view.WindowManager
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -12,7 +13,6 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
-import android.util.Base64
 
 object AppSecurity {
     private const val PREFS = "flosi_app_security_v2"
@@ -37,7 +37,7 @@ object AppSecurity {
     fun biometricAvailable(context: Context): Boolean = biometricStatus(context) == BiometricManager.BIOMETRIC_SUCCESS
 
     fun setPin(context: Context, pin: String) {
-        require(pin.matches(Regex("\\d{4,8}"))) { "رمز PIN يجب أن يكون من 4 إلى 8 أرقام" }
+        require(pin.matches(Regex("\\d{6}"))) { "رمز PIN يجب أن يكون 6 أرقام" }
         val salt = ByteArray(16).also(SecureRandom()::nextBytes)
         val hash = derive(pin, salt)
         prefs(context).edit()
@@ -53,6 +53,7 @@ object AppSecurity {
     }
 
     fun verifyPin(context: Context, pin: String): Boolean {
+        if (!pin.matches(Regex("\\d{6}"))) return false
         val p = prefs(context)
         val saltRaw = p.getString(K_PIN_SALT, null) ?: return false
         val hashRaw = p.getString(K_PIN_HASH, null) ?: return false
@@ -65,10 +66,7 @@ object AppSecurity {
     }
 
     fun setBiometricEnabled(context: Context, enabled: Boolean) {
-        if (enabled) {
-            require(hasPin(context)) { "عيّن PIN احتياطي أولاً" }
-            require(biometricAvailable(context)) { "القياسات الحيوية غير متاحة على هذا الجهاز" }
-        }
+        if (enabled) require(biometricAvailable(context)) { "القياسات الحيوية غير متاحة على هذا الجهاز" }
         prefs(context).edit().putBoolean(K_BIOMETRIC, enabled).apply()
         if (!enabled && !hasPin(context)) sessionUnlocked = true
     }
@@ -120,11 +118,12 @@ object AppSecurity {
         onUsePin: () -> Unit = {}
     ) {
         if (!biometricEnabled(activity)) {
-            onUnavailable("البصمة غير مفعّلة داخل Flosi")
+            onUnavailable("البصمة أو الوجه غير مفعّلين داخل Flosi")
             return
         }
+        val hasPin = hasPin(activity)
         if (!biometricAvailable(activity)) {
-            onUnavailable("تعذر استخدام القياسات الحيوية. استخدم PIN الاحتياطي.")
+            onUnavailable(if (hasPin) "تعذر استخدام القياسات الحيوية. استخدم PIN." else "تعذر استخدام القياسات الحيوية على هذا الجهاز.")
             return
         }
         val executor = ContextCompat.getMainExecutor(activity)
@@ -136,19 +135,19 @@ object AppSecurity {
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
-                if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) onUsePin()
+                if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON && hasPin) onUsePin()
                 else onUnavailable(errString.toString())
             }
             override fun onAuthenticationFailed() {
                 super.onAuthenticationFailed()
-                onUnavailable("لم يتم التحقق. حاول مرة ثانية أو استخدم PIN.")
+                onUnavailable(if (hasPin) "لم يتم التحقق. حاول مرة ثانية أو استخدم PIN." else "لم يتم التحقق. حاول مرة ثانية.")
             }
         })
         val info = BiometricPrompt.PromptInfo.Builder()
             .setTitle("فتح Flosi")
             .setSubtitle("تحقق بالبصمة أو الوجه")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-            .setNegativeButtonText("استخدام PIN")
+            .setNegativeButtonText(if (hasPin) "استخدام PIN" else "إلغاء")
             .build()
         prompt.authenticate(info)
     }
