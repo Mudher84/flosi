@@ -93,6 +93,7 @@ interface TransactionDao {
     fun observeForPerson(personId: Long): Flow<List<TransactionWithNames>>
 
     @Query("SELECT * FROM transactions WHERE id=:id LIMIT 1") suspend fun get(id: Long): TransactionEntity?
+    @Query("SELECT * FROM transactions WHERE linkedTransactionId=:rootId AND deleted=0 ORDER BY id") suspend fun linkedTo(rootId: Long): List<TransactionEntity>
 
     @Query("""
         SELECT t.id,t.kind,t.amount,t.title,t.note,t.occurredAt,
@@ -145,6 +146,7 @@ interface TransactionDao {
 @Dao interface CommitmentDao {
     @Query("SELECT * FROM commitments WHERE active=1 ORDER BY dueAt") fun observeActive(): Flow<List<CommitmentEntity>>
     @Query("SELECT * FROM commitments WHERE id=:id LIMIT 1") fun observe(id:Long): Flow<CommitmentEntity?>
+    @Query("SELECT * FROM commitments WHERE id=:id LIMIT 1") suspend fun get(id:Long): CommitmentEntity?
     @Insert suspend fun insert(entity: CommitmentEntity): Long
     @Update suspend fun update(entity: CommitmentEntity)
 }
