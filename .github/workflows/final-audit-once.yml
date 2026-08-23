@@ -1,0 +1,110 @@
+name: Flosi Final Audit Once
+on:
+  push:
+    paths:
+      - '.github/workflows/final-audit-once.yml'
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Build, test and write audit report
+        shell: bash
+        run: |
+          set +e
+          gradle --no-daemon clean testDebugUnitTest assembleDebug --stacktrace > final-build.log 2>&1
+          BUILD_CODE=$?
+          set -e
+
+          python3 - <<'PY' > static-audit.txt
+          from pathlib import Path
+          checks=[]
+          def check(name, ok):
+              checks.append((name, bool(ok)))
+
+          entities=Path('app/src/main/java/com/flosi/app/data/local/entity/Entities.kt').read_text(encoding='utf-8')
+          db=Path('app/src/main/java/com/flosi/app/data/local/FlosiDatabase.kt').read_text(encoding='utf-8')
+          pdf=Path('app/src/main/java/com/flosi/app/export/PdfExporter.kt').read_text(encoding='utf-8')
+          xlsx=Path('app/src/main/java/com/flosi/app/export/XlsxExporter.kt').read_text(encoding='utf-8')
+          worker=Path('app/src/main/java/com/flosi/app/worker/FlosiWorkers.kt').read_text(encoding='utf-8')
+          security=Path('app/src/main/java/com/flosi/app/security/AppSecurity.kt').read_text(encoding='utf-8')
+          currency_test=Path('app/src/test/java/com/flosi/app/finance/CurrencyConverterTest.kt').read_text(encoding='utf-8')
+          invoice_test=Path('app/src/test/java/com/flosi/app/finance/InvoiceMathTest.kt').read_text(encoding='utf-8')
+
+          check('Invoice entity persists currency', 'val currency:' in entities)
+          check('Room database migrated to v3', 'version = 3' in db and 'MIGRATION_2_3' in db)
+          check('Transaction PDF uses account currency', 't.accountCurrency' in pdf)
+          check('Invoice PDF uses invoice currency', 'invoice.currency' in pdf)
+          check('XLSX writes numeric amount cells', 'numberCell("E$r",t.amount)' in xlsx)
+          check('XLSX writes Excel date cells', 'excelSerial(t.occurredAt)' in xlsx)
+          check('Daily worker checks user preference', 'isDailySummaryEnabled(applicationContext)' in worker)
+          check('Security is fail-closed capable', 'verifyPin' in security and 'shouldLock' in security)
+          check('Currency converter tests present', 'missingRateFailsClosed' in currency_test and 'twoHopConversionUsesBridgeCurrency' in currency_test)
+          check('Invoice math tests present', 'invalidDiscountAndOverpaymentAreRejected' in invoice_test)
+
+          for name, ok in checks:
+              print(f"- {'PASS' if ok else 'FAIL'} — {name}")
+          print(f"STATIC_RESULT={'PASS' if all(ok for _,ok in checks) else 'FAIL'}")
+          PY
+
+          STATIC_RESULT=$(grep 'STATIC_RESULT=' static-audit.txt | cut -d= -f2)
+          {
+            echo '# Flosi Final Validation'
+            echo
+            echo "- Build/test command: \`gradle --no-daemon clean testDebugUnitTest assembleDebug --stacktrace\`"
+            if [ "$BUILD_CODE" -eq 0 ]; then
+              echo '- Android compile + unit tests + debug APK: **PASS**'
+            else
+              echo '- Android compile + unit tests + debug APK: **FAIL**'
+            fi
+            echo "- Static financial/security/export audit: **$STATIC_RESULT**"
+            echo
+            echo '## Static checks'
+            grep -v 'STATIC_RESULT=' static-audit.txt
+            echo
+            echo '## Build log tail'
+            echo '```text'
+            tail -n 180 final-build.log
+            echo '```'
+          } > FINAL_VALIDATION.md
+
+          echo "$BUILD_CODE" > build-exit-code.txt
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flosi-final-validation
+          path: |
+            FINAL_VALIDATION.md
+            final-build.log
+            app/build/outputs/apk/debug/*.apk
+
+      - name: Commit validation report
+        if: always()
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add FINAL_VALIDATION.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'test: record final Flosi validation result'
+            git push
+          fi
+
+      - name: Fail workflow when build failed
+        if: always()
+        shell: bash
+        run: |
+          code=$(cat build-exit-code.txt)
+          test "$code" -eq 0
