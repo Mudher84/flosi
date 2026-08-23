@@ -74,12 +74,19 @@ fun TodayScreen(onActivity: () -> Unit,onNotifications: () -> Unit) {
             CardBox {
                 if (state.recent.isEmpty()) Text("ماكو حركات بعد", color = FlosiMuted)
                 else state.recent.take(4).forEachIndexed { index, tx ->
-                    val incoming = tx.kind in listOf("income", "transfer_in", "invoice_payment","debt_received")
+                    val incoming = tx.kind in listOf("income", "invoice_payment","debt_received")
+                    val neutral = tx.kind in listOf("transfer_in","transfer_out","goal_saving")
+                    val value = when {
+                        tx.kind=="goal_saving" -> "حجز ${moneyText(tx.amount,tx.accountCurrency)}"
+                        neutral -> moneyText(tx.amount,tx.accountCurrency)
+                        incoming -> "+"+moneyText(tx.amount,tx.accountCurrency)
+                        else -> "−"+moneyText(tx.amount,tx.accountCurrency)
+                    }
                     ActionRow(
                         title = tx.title,
                         subtitle = listOfNotNull(tx.categoryName, tx.accountName).joinToString(" • "),
-                        value = (if (incoming) "+" else "−") + moneyText(tx.amount,tx.accountCurrency),
-                        accent = if (incoming) FlosiGreen else FlosiRed,
+                        value = value,
+                        accent = when { neutral->FlosiPurple; incoming->FlosiGreen; else->FlosiRed },
                         onClick = onActivity
                     )
                     if (index < state.recent.take(4).lastIndex) HorizontalDivider(color = FlosiLine)
