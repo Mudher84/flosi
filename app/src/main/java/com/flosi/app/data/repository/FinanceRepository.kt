@@ -122,13 +122,15 @@ class FinanceRepository(
     }
 
     private suspend fun applyAccountingEffect(tx: TransactionEntity, reverse: Boolean) {
+        val direction = if (reverse) -1 else 1
         val sign = when (tx.kind) {
             "income","transfer_in","invoice_payment" -> +1
             "expense","transfer_out","debt_given" -> -1
             "debt_received" -> +1
             else -> 0
-        } * if (reverse) -1 else 1
+        } * direction
         if (sign != 0) db.accountDao().adjustBalance(tx.accountId, tx.amount * sign)
+
         tx.personId?.let { personId ->
             val personDelta = when (tx.kind) {
                 "debt_given" -> tx.amount
@@ -136,8 +138,14 @@ class FinanceRepository(
                 "income","invoice_payment" -> -tx.amount
                 "expense" -> tx.amount
                 else -> 0
-            } * if (reverse) -1 else 1
+            } * direction
             if (personDelta != 0L) db.personDao().adjustBalance(personId, personDelta)
+        }
+
+        if (tx.kind == "goal_saving") {
+            tx.goalId?.let { goalId ->
+                db.goalDao().adjustSaved(goalId, tx.amount * direction)
+            }
         }
     }
 
@@ -159,6 +167,32 @@ class FinanceRepository(
         outId to inId
     }
 
+    suspend fun reserveForGoal(goalId: Long, amount: Long): Long = db.withTransaction {
+        require(amount > 0L) { "مبلغ الادخار يجب أن يكون أكبر من صفر" }
+        val goal = db.goalDao().get(goalId) ?: error("الهدف غير موجود")
+        require(goal.active) { "الهدف غير مفعّل" }
+        val accountId = goal.accountId ?: error("اربط الهدف بحساب قبل إضافة ادخار")
+        val account = db.accountDao().get(accountId) ?: error("الحساب المرتبط بالهدف غير موجود")
+        val remaining = (goal.targetAmount - goal.savedAmount).coerceAtLeast(0L)
+        require(remaining > 0L) { "الهدف مكتمل" }
+        require(amount <= remaining) { "المبلغ أكبر من المتبقي للوصول إلى الهدف" }
+
+        val alreadyReserved = db.goalDao().reservedForAccount(accountId)
+        val availableToReserve = (account.currentBalance - alreadyReserved).coerceAtLeast(0L)
+        require(amount <= availableToReserve) { "المتاح غير المحجوز في الحساب لا يكفي" }
+
+        addTransactionInternal(
+            TransactionEntity(
+                kind = "goal_saving",
+                amount = amount,
+                title = "ادخار: ${goal.title}",
+                note = "حجز للهدف بدون اعتباره مصروفاً",
+                accountId = accountId,
+                goalId = goal.id
+            )
+        )
+    }
+
     fun observeAccount(id:Long) = db.accountDao().observe(id)
     fun observePerson(id:Long) = db.personDao().observe(id)
     fun observePersonTransactions(id:Long) = db.transactionDao().observeForPerson(id)
@@ -172,14 +206,25 @@ class FinanceRepository(
     suspend fun updateCategory(item:CategoryEntity) = db.categoryDao().update(item)
     suspend fun updateCommitment(item:CommitmentEntity) = db.commitmentDao().update(item)
     suspend fun updateBudget(item:BudgetEntity) = db.budgetDao().update(item)
-    suspend fun updateGoal(item:GoalEntity) = db.goalDao().update(item)
+    suspend fun updateGoal(item:GoalEntity) = db.goalDao().update(item.copy(savedAmount=item.savedAmount.coerceIn(0L,item.targetAmount.coerceAtLeast(0L))))
     suspend fun updateInvoice(item:InvoiceEntity) = db.invoiceDao().update(item)
     suspend fun addPerson(person: PersonEntity) = db.personDao().insert(person.copy(currentBalance=person.openingBalance))
     suspend fun addAccount(account: AccountEntity) = db.accountDao().insert(account.copy(currentBalance=account.openingBalance))
     suspend fun addCategory(category: CategoryEntity) = db.categoryDao().insert(category)
     suspend fun addCommitment(item: CommitmentEntity) = db.commitmentDao().insert(item)
-    suspend fun addBudget(item: BudgetEntity) = db.budgetDao().insert(item)
-    suspend fun addGoal(item: GoalEntity) = db.goalDao().insert(item)
+
+    suspend fun addBudget(item: BudgetEntity): Long {
+        require(item.limitAmount > 0L) { "حد الميزانية يجب أن يكون أكبر من صفر" }
+        require(item.periodEnd >= item.periodStart) { "فترة الميزانية غير صالحة" }
+        require(item.warningPercent in 1..100) { "نسبة التنبيه غير صالحة" }
+        return db.budgetDao().insert(item.copy(currency=CurrencyConverter.normalizeCode(item.currency)))
+    }
+
+    suspend fun addGoal(item: GoalEntity): Long {
+        require(item.targetAmount > 0L) { "قيمة الهدف يجب أن تكون أكبر من صفر" }
+        require(item.accountId != null) { "اختر حساباً مرتبطاً بالهدف" }
+        return db.goalDao().insert(item.copy(savedAmount=0L))
+    }
 
     suspend fun createInvoice(invoice: InvoiceEntity, items: List<InvoiceItemEntity>): Long = db.withTransaction {
         val id = db.invoiceDao().insertInvoice(invoice)
