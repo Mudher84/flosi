@@ -23,7 +23,10 @@ fun AddTransactionScreen(
     onBack:()->Unit,
     onPickAccount:()->Unit,
     onPickPerson:()->Unit,
-    onPickCategory:()->Unit
+    onPickCategory:()->Unit,
+    pickedAccountId:Long?=null,
+    pickedPersonId:Long?=null,
+    pickedCategoryId:Long?=null
 ) {
     val vm:EntryViewModel=flosiViewModel()
     val accounts by vm.accounts.collectAsState()
@@ -34,17 +37,25 @@ fun AddTransactionScreen(
     var title by remember{mutableStateOf("")}
     var note by remember{mutableStateOf("")}
     var kind by remember{mutableStateOf("expense")}
-    var accountId by remember(accounts){mutableStateOf(accounts.firstOrNull()?.id?:0L)}
+    var accountId by remember{mutableStateOf(0L)}
     var personId by remember{mutableStateOf<Long?>(null)}
     var categoryId by remember{mutableStateOf<Long?>(null)}
     var saving by remember{mutableStateOf(false)}
     var error by remember{mutableStateOf<String?>(null)}
 
-    LaunchedEffect(accounts){if(accountId==0L)accountId=accounts.firstOrNull()?.id?:0L}
+    LaunchedEffect(accounts){
+        if(accounts.none{it.id==accountId}) accountId=accounts.firstOrNull()?.id?:0L
+    }
+    LaunchedEffect(pickedAccountId){if(pickedAccountId!=null&&accounts.any{it.id==pickedAccountId}){accountId=pickedAccountId;personId=null}}
+    LaunchedEffect(pickedPersonId){if(pickedPersonId!=null)personId=pickedPersonId}
+    LaunchedEffect(pickedCategoryId){if(pickedCategoryId!=null)categoryId=pickedCategoryId}
     LaunchedEffect(kind,categories){
         val selected=categories.firstOrNull{it.id==categoryId}
         if(selected!=null && selected.kind!="both" && selected.kind!=kind) categoryId=null
     }
+    val selectedAccount=accounts.firstOrNull{it.id==accountId}
+    val eligiblePeople=people.filter{person->selectedAccount==null||person.currency.equals(selectedAccount.currency,ignoreCase=true)}
+    LaunchedEffect(accountId,people){if(personId!=null&&eligiblePeople.none{it.id==personId})personId=null}
     fun s(ar:String,en:String)=if(lang=="ar")ar else en
 
     val eligibleCategories=categories.filter { category ->
@@ -75,16 +86,17 @@ fun AddTransactionScreen(
             Text(flosiText("account"))
             if(accounts.isEmpty()) Text(s("لا يوجد حساب. أضف حساباً أولاً.","No account exists. Add an account first."),color=FlosiRed)
             Column(verticalArrangement=Arrangement.spacedBy(4.dp)){
-                accounts.take(4).forEach{account->FilterChip(accountId==account.id,{accountId=account.id;error=null},{Text("${account.name} • ${account.currency}")})}
+                accounts.take(4).forEach{account->FilterChip(accountId==account.id,{accountId=account.id;personId=null;error=null},{Text("${account.name} • ${account.currency}")})}
             }
             if(accounts.size>4) TextButton(onClick=onPickAccount){Text(s("عرض كل الحسابات","View all accounts"))}
 
             Text(s("الشخص — اختياري","Person — optional"))
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 FilterChip(personId==null,{personId=null;error=null},{Text(s("بدون","None"))})
-                people.take(3).forEach{person->FilterChip(personId==person.id,{personId=person.id;error=null},{Text(person.name)})}
+                eligiblePeople.take(3).forEach{person->FilterChip(personId==person.id,{personId=person.id;error=null},{Text(person.name)})}
             }
-            if(people.size>3) TextButton(onClick=onPickPerson){Text(s("عرض كل الأشخاص","View all people"))}
+            if(eligiblePeople.size>3) TextButton(onClick=onPickPerson){Text(s("عرض كل الأشخاص بنفس العملة","View all people in this currency"))}
+            if(people.isNotEmpty()&&eligiblePeople.isEmpty())Text(s("لا يوجد شخص بعملة ${selectedAccount?.currency.orEmpty()}.","No person uses ${selectedAccount?.currency.orEmpty()}."),color=FlosiMuted)
 
             Text(flosiText("category"))
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
