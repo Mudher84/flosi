@@ -43,7 +43,7 @@ fun CreateInvoiceScreen(onBack:()->Unit){
     val vm:InvoicesViewModel=flosiViewModel()
     val preferences=rememberFlosiPreferences()
     val prefs by preferences.state.collectAsState(initial=FlosiPreferencesState())
-    val currency=prefs.currency
+    val currency=prefs.currency.trim().uppercase().ifBlank{"IQD"}
 
     val lines=remember{mutableStateListOf<DraftInvoiceLine>()}
     var title by remember{mutableStateOf("")}
@@ -70,6 +70,10 @@ fun CreateInvoiceScreen(onBack:()->Unit){
     }.getOrNull()
 
     FlosiPage("إنشاء فاتورة","بنود متعددة وحسابات دقيقة",onBack){
+        CardBox{
+            Text("عملة الفاتورة: $currency",color=FlosiMuted)
+            Text("تُحفظ العملة مع الفاتورة نفسها حتى لا تتغير قيمتها عند تغيير عملة التطبيق لاحقاً.",color=FlosiMuted)
+        }
         CardBox{
             Text("إضافة بند",color=FlosiText)
             OutlinedTextField(
@@ -165,6 +169,7 @@ fun CreateInvoiceScreen(onBack:()->Unit){
                 val number="F-${System.currentTimeMillis().toString().takeLast(6)}"
                 val invoice=InvoiceEntity(
                     number=number,
+                    currency=currency,
                     subtotal=calculated.subtotal,
                     discount=calculated.discount,
                     total=calculated.total,
