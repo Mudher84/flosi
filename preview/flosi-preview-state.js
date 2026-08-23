@@ -114,8 +114,6 @@ function renderTransactions(){
 function zeroStaticDemo(){
   const {currency}=localeState();
   document.querySelectorAll('.obAmount').forEach(el=>setText(el,money(0,currency,localeState().locale)));
-  document.querySelectorAll('.goalRing').forEach(el=>{const b=el.querySelector('b');if(b)setText(b,'0%');el.style.background='conic-gradient(var(--p) 0 0%,#eeeaf4 0)'});
-  document.querySelectorAll('.goalText small').forEach(el=>setText(el,`0 / 0 ${currency}`));
   document.querySelectorAll('.intel ul').forEach(list=>{
     list.replaceChildren();
     ['ابدأ بإضافة أول دخل أو مصروف حتى يبني Flosi تحليلك.','أضف هدفاً أو ميزانية عندما تكون جاهزاً.','التحليلات والتوقعات تبدأ من بياناتك أنت فقط.'].forEach(text=>{const li=document.createElement('li');li.textContent=text;list.appendChild(li)});
