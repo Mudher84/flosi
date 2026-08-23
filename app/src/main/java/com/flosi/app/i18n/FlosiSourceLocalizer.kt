@@ -36,7 +36,25 @@ private val englishLegacy = mapOf(
     "لا يتم جمع عملات مختلفة كأنها وحدة واحدة." to "Different currencies are never added as if they were one unit.",
     "السجل" to "History","ماكو حركات مطابقة" to "No matching transactions","إعداداتك ومساحتك" to "Your settings and space",
     "فلوسي الشخصي" to "Personal Flosi","أموالك" to "Your money","خطط الصرف" to "Spending plans","القادم عليك" to "Upcoming obligations",
-    "بيع وقبض" to "Sales and collections","حماية" to "Protection"
+    "بيع وقبض" to "Sales and collections","حماية" to "Protection",
+    "تفاصيل الحساب" to "Account details","الرصيد الحالي" to "Current balance","تحويل من/إلى الحساب" to "Transfer from/to account",
+    "إدارة التحويلات" to "Manage transfers","إضافة حساب" to "Add account","حساب أو محفظة بعملة مستقلة" to "Account or wallet with its own currency",
+    "نوع الحساب" to "Account type","عملة الحساب" to "Account currency","اختيار الحساب" to "Choose account","حساباتك الحقيقية" to "Your real accounts",
+    "اختيار" to "Choose","تحويل بين الحسابات" to "Transfer between accounts","يحدث الرصيدين فوراً" to "Updates both balances immediately",
+    "سيصل للحساب الآخر" to "Received by destination account","حساباتك مع الآخرين" to "Your balances with other people",
+    "صافي حسابات الأشخاص" to "Net people balances","أضف أول شخص" to "Add your first person","إضافة شخص" to "Add person","حساب جديد" to "New balance account",
+    "اختيار شخص" to "Choose person","من دفتر الأشخاص" to "From your people directory","كشف الحساب" to "Statement","حساب الشخص" to "Person account",
+    "ماكو حركات مرتبطة" to "No linked transactions","إدارة التصنيفات" to "Manage categories","أضف أو أخفِ التصنيف" to "Add or hide categories",
+    "اختيار التصنيف" to "Choose category","تصنيفاتك الفعلية" to "Your actual categories","إضافة التزام" to "Add commitment",
+    "يحفظ بقاعدة البيانات" to "Saved to your database","إجمالي الالتزامات" to "Total commitments","القادم" to "Upcoming",
+    "ماكو التزامات بعد" to "No commitments yet","ميزانية جديدة" to "New budget","شهر تقويمي وصرف فعلي" to "Calendar month with actual spending",
+    "الصرف الفعلي مقابل الحدود" to "Actual spending versus limits","الميزانيات النشطة" to "Active budgets","تحتاج انتباه" to "Needs attention",
+    "ماكو ميزانيات بعد" to "No budgets yet","هدف جديد" to "New goal","ادخار محجوز ومربوط بحساب" to "Reserved savings linked to an account",
+    "الأهداف والادخار المحجوز" to "Goals and reserved savings","من بياناتك الفعلية" to "From your actual data","أعلى التصنيفات" to "Top categories",
+    "فواتير محفوظة وحسابات واضحة" to "Saved invoices with clear accounting","إضافة حركة" to "Add transaction","تفاصيل الحركة" to "Transaction details",
+    "مركز البيانات" to "Data center","الاستيراد والتصدير" to "Import & export","النسخ الاحتياطية" to "Backups","إدارة النسخ الاحتياطية" to "Manage backups",
+    "مركز الإشعارات" to "Notification center","إعدادات الإشعارات" to "Notification settings","الأمان والنسخ" to "Security & backups",
+    "مستوى الحماية" to "Protection level","قفل Flosi الآن" to "Lock Flosi now","إدارة النسخ الاحتياطية المشفرة" to "Manage encrypted backups"
 )
 
 @Composable
