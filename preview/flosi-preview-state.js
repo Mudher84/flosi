@@ -6,7 +6,9 @@ window.__FLOSI_PREVIEW_STATE__=true;
 const STORAGE_KEY='flosi-preview-ledger-v1';
 const SOURCE_KEY='flosi-preview-source-currency-v1';
 const RESET_KEY='flosi-preview-zero-reset-20260823-v1';
-const BASE=Object.freeze({balance:0,monthIncome:0,monthExpense:0,safe:0,forecast:0});
+const COMMITMENTS_KEY='flosi-preview-commitments-v1';
+const GOALS_KEY='flosi-preview-goals-v1';
+const BASE=Object.freeze({balance:0,monthIncome:0,monthExpense:0});
 const DEMO=[];
 
 function selectedCurrency(){return (localStorage.getItem('flosi-currency')||'IQD').toUpperCase()}
@@ -24,13 +26,10 @@ function sourceCurrency(){
   return source;
 }
 function readState(){
-  try{
-    const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
-    if(parsed&&parsed.version===1&&Array.isArray(parsed.entries)) return parsed;
-  }catch(_){ }
+  try{const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');if(parsed&&parsed.version===1&&Array.isArray(parsed.entries))return parsed}catch(_){ }
   return {version:1,entries:[]};
 }
-function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
+function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));window.dispatchEvent(new CustomEvent('flosi-ledger-changed'))}
 function entries(){return readState().entries.filter(x=>x&&['income','expense'].includes(x.kind)&&Number.isFinite(Number(x.amountUsd))&&Number(x.amountUsd)>0)}
 function localeState(){
   const lang=localStorage.getItem('flosi-lang-preview')||localStorage.getItem('flosi-lang')||'ar';
@@ -47,13 +46,8 @@ function fxRate(currency){
   const reverse=Number(localStorage.getItem(rateKey(target,source))||'');
   return Number.isFinite(reverse)&&reverse>0?1/reverse:null;
 }
-function toSource(value,currency){
-  const n=Number(value);if(!Number.isFinite(n))return null;
-  const rate=fxRate(currency);return rate===null?null:n/rate;
-}
-function fromSource(value,currency){
-  const rate=fxRate(currency);return rate===null?null:Number(value)*rate;
-}
+function toSource(value,currency){const n=Number(value);if(!Number.isFinite(n))return null;const rate=fxRate(currency);return rate===null?null:n/rate}
+function fromSource(value,currency){const rate=fxRate(currency);return rate===null?null:Number(value)*rate}
 function fractionDigits(currency){return ['IQD','JPY','KRW'].includes(currency)?0:2}
 function money(value,currency,locale){
   try{return new Intl.NumberFormat(locale,{style:'currency',currency,maximumFractionDigits:fractionDigits(currency)}).format(Math.abs(value))}
@@ -65,6 +59,17 @@ function fmtSource(value){
   const converted=fromSource(numeric,currency);
   return converted===null?money(numeric,source,locale):money(converted,currency,locale);
 }
+function readCollection(key,field){try{const p=JSON.parse(localStorage.getItem(key)||'null');return p&&p.version===1&&Array.isArray(p[field])?p[field]:[]}catch(_){return []}}
+function reserves(){
+  const missing=new Set();
+  const convert=(amount,currency)=>{const value=toSource(Number(amount)||0,currency||sourceCurrency());if(value===null){missing.add(String(currency||'').toUpperCase());return 0}return value};
+  const commitments=readCollection(COMMITMENTS_KEY,'items').filter(x=>x&&x.active!==false).reduce((s,x)=>s+convert(x.amount,x.currency),0);
+  const goals=readCollection(GOALS_KEY,'goals').filter(x=>x).reduce((s,x)=>{
+    const target=Math.max(0,Number(x.target)||0),saved=Math.max(0,Number(x.saved)||0),reserved=target>0?Math.min(saved,target):saved;
+    return s+convert(reserved,x.currency)
+  },0);
+  return {commitments,goals,total:commitments+goals,missing:[...missing].filter(Boolean)};
+}
 function metrics(){
   const list=entries();
   const incomeDelta=list.filter(x=>x.kind==='income').reduce((s,x)=>s+Number(x.amountUsd),0);
@@ -74,14 +79,13 @@ function metrics(){
   const monthExpense=BASE.monthExpense+expenseDelta;
   const netMonth=monthIncome-monthExpense;
   const balance=BASE.balance+balanceDelta;
-  const safe=Math.max(0,BASE.safe+balanceDelta);
-  const forecast=Math.max(0,BASE.forecast+balanceDelta);
+  const reserve=reserves();
+  const safe=Math.max(0,balance-reserve.total);
+  const forecast=Math.max(0,safe);
   const savingsRate=monthIncome>0?Math.max(0,Math.min(100,(netMonth/monthIncome)*100)):0;
-  return {monthIncome,monthExpense,netMonth,balance,safe,forecast,savingsRate};
+  return {monthIncome,monthExpense,netMonth,balance,safe,forecast,savingsRate,reserve};
 }
-function remainingDays(){
-  const now=new Date();return Math.max(1,new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate()+1);
-}
+function remainingDays(){const now=new Date();return Math.max(1,new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate()+1)}
 function mark(el){if(el)el.setAttribute('data-locale-no-transform','');return el}
 function setText(el,text){if(mark(el))el.textContent=text}
 function ensureMetricLive(card,key){
@@ -112,8 +116,6 @@ function renderTransactions(){
   const activityPanel=document.querySelector('#activity .panel');if(activityPanel){activityPanel.replaceChildren(...(all.length?all.map(rowFor):[emptyRow('لا توجد حركات بعد')]));mark(activityPanel)}
 }
 function zeroStaticDemo(){
-  const {currency}=localeState();
-  document.querySelectorAll('.obAmount').forEach(el=>setText(el,money(0,currency,localeState().locale)));
   document.querySelectorAll('.intel ul').forEach(list=>{
     list.replaceChildren();
     ['ابدأ بإضافة أول دخل أو مصروف حتى يبني Flosi تحليلك.','أضف هدفاً أو ميزانية عندما تكون جاهزاً.','التحليلات والتوقعات تبدأ من بياناتك أنت فقط.'].forEach(text=>{const li=document.createElement('li');li.textContent=text;list.appendChild(li)});
@@ -123,8 +125,10 @@ function zeroStaticDemo(){
 }
 function renderMetrics(){
   const r=installLiveRegions(),m=metrics();
-  setText(r.heroBalance,fmtSource(m.balance));setText(r.heroNet,(m.netMonth>=0?'+':'−')+fmtSource(Math.abs(m.netMonth))+' هذا الشهر');setText(r.safe,fmtSource(m.safe));setText(r.forecastHero,fmtSource(m.forecast));setText(r.forecast,fmtSource(m.forecast));setText(r.monthIncome,fmtSource(m.monthIncome));setText(r.monthExpense,fmtSource(m.monthExpense));setText(r.commitments,fmtSource(0));setText(r.savingsRate,`${Math.round(m.savingsRate)}%`);
-  setText(r.brief,m.monthIncome===0&&m.monthExpense===0?'التطبيق مصفّر وجاهز. أضف أول حركة حتى يبدأ Flosi بحساب ملخصك المالي.':`المتاح للصرف بأمان الآن ${fmtSource(m.safe)}. معدل الصرف اليومي المقترح ${fmtSource(m.safe/remainingDays())} حتى نهاية الشهر.`);
+  setText(r.heroBalance,fmtSource(m.balance));setText(r.heroNet,(m.netMonth>=0?'+':'−')+fmtSource(Math.abs(m.netMonth))+' هذا الشهر');setText(r.safe,fmtSource(m.safe));setText(r.forecastHero,fmtSource(m.forecast));setText(r.forecast,fmtSource(m.forecast));setText(r.monthIncome,fmtSource(m.monthIncome));setText(r.monthExpense,fmtSource(m.monthExpense));setText(r.commitments,fmtSource(m.reserve.commitments));setText(r.savingsRate,`${Math.round(m.savingsRate)}%`);
+  const reserveText=m.reserve.total>0?` بعد حجز ${fmtSource(m.reserve.commitments)} للالتزامات و${fmtSource(m.reserve.goals)} للأهداف.`:'';
+  const missingText=m.reserve.missing.length?` توجد عملات بلا سعر تحويل: ${m.reserve.missing.join(', ')}.`:'';
+  setText(r.brief,m.monthIncome===0&&m.monthExpense===0&&m.reserve.total===0?'التطبيق مصفّر وجاهز. أضف أول حركة حتى يبدأ Flosi بحساب ملخصك المالي.':`المتاح للصرف بأمان الآن ${fmtSource(m.safe)}.${reserveText} معدل الصرف اليومي المقترح ${fmtSource(m.safe/remainingDays())} حتى نهاية الشهر.${missingText}`);
   zeroStaticDemo();
 }
 function syncModalCurrency(){
@@ -149,6 +153,7 @@ function bind(){
   document.addEventListener('change',e=>{if(e.target&&['settingsLang','settingsCurrency'].includes(e.target.id))setTimeout(renderAll,80)},true);
   document.addEventListener('click',e=>{if(e.target.closest('#settingsSaveLocale,#previewFxSave'))setTimeout(renderAll,160)},true);
   window.addEventListener('storage',e=>{if(!e.key||e.key.startsWith('flosi-'))renderAll()});
+  window.addEventListener('flosi-commitments-changed',renderAll);window.addEventListener('flosi-goals-changed',renderAll);window.addEventListener('flosi-ledger-changed',renderAll);
 }
 
 bind();renderAll();setTimeout(renderAll,180);
