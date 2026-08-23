@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - flosi-source.zip
+      - bootstrap/READY
 
 permissions:
   contents: write
@@ -14,11 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack source
+      - name: Rebuild source archive
         run: |
+          cat bootstrap/chunk-* | base64 -d > flosi-source.zip
           unzip -o flosi-source.zip -d .bootstrap
           cp -a .bootstrap/flosi-native-v1.4-premium-rtl-home/. .
-          rm -rf .bootstrap flosi-source.zip .github/workflows/bootstrap-upload.yml
+          rm -rf .bootstrap flosi-source.zip bootstrap .github/workflows/bootstrap-upload.yml
       - name: Commit source tree
         run: |
           git config user.name "github-actions[bot]"
