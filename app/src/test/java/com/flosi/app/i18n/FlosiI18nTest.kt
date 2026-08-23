@@ -26,7 +26,7 @@ class FlosiI18nTest {
     }
 
     @Test
-    fun unsupportedLocaleFallsBackSafely() {
-        assertEquals("Today", FlosiI18n.text("xx", "today"))
+    fun unsupportedLocaleFallsBackToAppDefaultSafely() {
+        assertEquals("اليوم", FlosiI18n.text("xx", "today"))
     }
 }
