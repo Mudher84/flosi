@@ -8,6 +8,11 @@ import androidx.compose.ui.platform.LocalContext
 import com.flosi.app.export.PdfExporter
 import com.flosi.app.ui.components.*
 import com.flosi.app.ui.viewmodel.rememberFlosiRepository
+import java.util.Locale
+
+private fun previewQuantity(value:Double):String =
+    if(value%1.0==0.0) String.format(Locale.US,"%.0f",value)
+    else String.format(Locale.US,"%.3f",value).trimEnd('0').trimEnd('.')
 
 @Composable
 fun PdfPreviewScreen(invoiceId:Long,onBack:()->Unit){
@@ -26,8 +31,20 @@ fun PdfPreviewScreen(invoiceId:Long,onBack:()->Unit){
     }
     FlosiPage("معاينة PDF","فاتورة حقيقية",onBack){
         inv?.let{i->
-            CardBox{Metric("فاتورة #${i.number}",moneyText(i.total),FlosiPurple);Text("الحالة: ${i.status}")}
-            CardBox{items.forEach{ActionRow(it.title,"${it.quantity} × ${moneyText(it.unitPrice)}",moneyText(it.lineTotal))}}
+            val currency=i.currency.trim().uppercase().ifBlank{"IQD"}
+            CardBox{
+                Metric("فاتورة #${i.number}",moneyText(i.total,currency),FlosiPurple)
+                Text("الحالة: ${i.status} • العملة: $currency",color=FlosiMuted)
+            }
+            CardBox{
+                items.forEach{item->
+                    ActionRow(
+                        item.title,
+                        "${previewQuantity(item.quantity)} × ${moneyText(item.unitPrice,currency)}",
+                        moneyText(item.lineTotal,currency)
+                    )
+                }
+            }
             Button(onClick={launcher.launch("invoice-${i.number}.pdf")}){Text("حفظ PDF")}
         } ?: CardBox{Text("الفاتورة غير موجودة")}
         if(status.isNotBlank())Text(status,color=FlosiGreen)
