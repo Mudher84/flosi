@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - '.github/workflows/runtime-smoke-once.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/runtime-smoke-once.yml'
 permissions:
   contents: read
 jobs:
