@@ -122,6 +122,8 @@ data class InvoiceEntity(
     @ColumnInfo(defaultValue = "'IQD'") val currency: String = "IQD",
     val subtotal: Long,
     val discount: Long = 0,
+    @ColumnInfo(defaultValue = "0") val taxPercent: Double = 0.0,
+    @ColumnInfo(defaultValue = "0") val taxAmount: Long = 0,
     val total: Long,
     val paidAmount: Long = 0,
     val note: String = "",
