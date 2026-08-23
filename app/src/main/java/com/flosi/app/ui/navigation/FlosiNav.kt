@@ -95,7 +95,20 @@ fun FlosiApp() {
             composable(R.TODAY) { TodayScreen(onActivity = { nav.navigate(R.ACTIVITY) }, onNotifications = { nav.navigate(R.NOTIFICATIONS) }) }
             composable(R.ACTIVITY) { ActivityScreen(onOpenDetail = { id -> nav.navigate("${R.TX_DETAIL}/$id") }, onAdd = { nav.navigate(R.TX_ADD) }) }
             composable("${R.TX_DETAIL}/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry -> TransactionDetailScreen(entry.arguments?.getLong("id") ?: 0L) { nav.popBackStack() } }
-            composable(R.TX_ADD) { AddTransactionScreen({ nav.popBackStack() }, { nav.navigate(R.ACCOUNT_PICKER) }, { nav.navigate(R.PERSON_PICKER) }, { nav.navigate(R.CATEGORY_PICKER) }) }
+            composable(R.TX_ADD) { entry ->
+                val pickedAccount by entry.savedStateHandle.getStateFlow<Long?>("pickedAccountId",null).collectAsState()
+                val pickedPerson by entry.savedStateHandle.getStateFlow<Long?>("pickedPersonId",null).collectAsState()
+                val pickedCategory by entry.savedStateHandle.getStateFlow<Long?>("pickedCategoryId",null).collectAsState()
+                AddTransactionScreen(
+                    onBack={nav.popBackStack()},
+                    onPickAccount={nav.navigate(R.ACCOUNT_PICKER)},
+                    onPickPerson={nav.navigate(R.PERSON_PICKER)},
+                    onPickCategory={nav.navigate(R.CATEGORY_PICKER)},
+                    pickedAccountId=pickedAccount,
+                    pickedPersonId=pickedPerson,
+                    pickedCategoryId=pickedCategory
+                )
+            }
             composable(R.PEOPLE) { PeopleScreen({ id -> nav.navigate("${R.PERSON}/$id") }, { nav.navigate(R.PERSON_EDIT) }) }
             composable("${R.PERSON}/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry -> PersonStatementScreen(entry.arguments?.getLong("id") ?: 0L, { nav.popBackStack() }, { nav.navigate(R.TX_ADD) }) }
             composable(R.PERSON_EDIT) { PersonEditScreen { nav.popBackStack() } }
@@ -117,10 +130,35 @@ fun FlosiApp() {
             composable(R.NOTIFICATIONS) { FlosiNotificationCenterScreen { nav.popBackStack() } }
             composable(R.SECURITY) { SecurityCenterScreen({ nav.popBackStack() }, { nav.navigate(R.BACKUPS) }) { securityEpoch++ } }
             composable(R.ME) { MeSettingsScreen({ nav.navigate(R.ACCOUNTS) }, { nav.navigate(R.BUDGETS) }, { nav.navigate(R.GOALS) }, { nav.navigate(R.COMMITMENTS) }, { nav.navigate(R.ANALYTICS) }, { nav.navigate(R.INVOICES) }, { nav.navigate(R.SECURITY) }, { nav.navigate(R.LOCALE) }, { nav.navigate(R.DATA_CENTER) }) }
-            composable(R.CATEGORY_PICKER) { CategoryPickerScreen({ nav.popBackStack() }, { nav.navigate(R.CATEGORY_MANAGE) }) }
+            composable(R.CATEGORY_PICKER) {
+                val source=nav.previousBackStackEntry
+                val kind=source?.savedStateHandle?.get<String>("pickerCategoryKind")
+                CategoryPickerScreen(
+                    onBack={nav.popBackStack()},
+                    onManage={nav.navigate(R.CATEGORY_MANAGE)},
+                    onSelect={id->source?.savedStateHandle?.set("pickedCategoryId",id);nav.popBackStack()},
+                    kind=kind
+                )
+            }
             composable(R.CATEGORY_MANAGE) { CategoryManagementScreen { nav.popBackStack() } }
-            composable(R.ACCOUNT_PICKER) { AccountPickerScreen({ nav.popBackStack() }, { nav.navigate(R.ACCOUNT_EDIT) }) }
-            composable(R.PERSON_PICKER) { PersonPickerScreen({ nav.popBackStack() }, { nav.navigate(R.PERSON_EDIT) }) }
+            composable(R.ACCOUNT_PICKER) {
+                val source=nav.previousBackStackEntry
+                AccountPickerScreen(
+                    onBack={nav.popBackStack()},
+                    onAddAccount={nav.navigate(R.ACCOUNT_EDIT)},
+                    onSelect={id->source?.savedStateHandle?.set("pickedAccountId",id);nav.popBackStack()}
+                )
+            }
+            composable(R.PERSON_PICKER) {
+                val source=nav.previousBackStackEntry
+                val currency=source?.savedStateHandle?.get<String>("pickerPersonCurrency")
+                PersonPickerScreen(
+                    onBack={nav.popBackStack()},
+                    onAddPerson={nav.navigate(R.PERSON_EDIT)},
+                    onSelect={id->source?.savedStateHandle?.set("pickedPersonId",id);nav.popBackStack()},
+                    currency=currency
+                )
+            }
             composable(R.DATA_CENTER) { DataCenterScreen { nav.popBackStack() } }
             composable(R.LOCALE) { LocaleCurrencyScreen { nav.popBackStack() } }
             composable(R.BACKUPS) { BackupManagerScreen { nav.popBackStack() } }
