@@ -3,6 +3,7 @@ on:
   pull_request:
 permissions:
   contents: read
+
 jobs:
   runtime-smoke:
     runs-on: ubuntu-latest
@@ -15,9 +16,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+
+      - name: Unit tests
+        run: gradle --no-daemon testDebugUnitTest --stacktrace
+
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
-      - name: Launch and navigate Flosi on Android emulator
+        run: gradle --no-daemon assembleDebug --stacktrace
+
+      - name: Launch authenticated entry gate on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -26,62 +32,31 @@ jobs:
           disable-animations: true
           script: |
             set -euo pipefail
-            APK=$(find app/build/outputs/apk/debug -name '*.apk' | head -n1)
+            APK=$(find app/build/outputs/apk/debug -name '*.apk' -type f | head -n1)
+            test -n "$APK"
+            test -s "$APK"
             adb install -r "$APK"
             adb logcat -c
             adb shell am start -W -n com.flosi.app/.MainActivity | tee launch.txt
             sleep 5
             adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb pull /sdcard/window.xml home.xml >/dev/null
-            grep -q 'فلوسي' home.xml
-            grep -q 'إجمالي أموالك' home.xml
+            adb pull /sdcard/window.xml entry.xml >/dev/null
 
-            cat > /tmp/tap.py <<'PY'
-            import re, subprocess, sys, xml.etree.ElementTree as ET
-            target=sys.argv[1]
-            for _ in range(5):
-                subprocess.run(['adb','shell','uiautomator','dump','/sdcard/w.xml'],stdout=subprocess.DEVNULL,check=True)
-                subprocess.run(['adb','pull','/sdcard/w.xml','/tmp/w.xml'],stdout=subprocess.DEVNULL,check=True)
-                root=ET.parse('/tmp/w.xml').getroot()
-                for n in root.iter('node'):
-                    if target in ((n.attrib.get('text') or '')+' '+(n.attrib.get('content-desc') or '')):
-                        m=re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
-                        if m:
-                            x=(int(m.group(1))+int(m.group(3)))//2; y=(int(m.group(2))+int(m.group(4)))//2
-                            subprocess.run(['adb','shell','input','tap',str(x),str(y)],check=True); sys.exit(0)
-                subprocess.run(['adb','shell','input','swipe','540','1750','540','700','350'],check=True)
-            sys.exit(2)
-            PY
-
-            python3 /tmp/tap.py 'أنا'
-            sleep 2
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb pull /sdcard/window.xml me.xml >/dev/null
-            grep -q 'الحسابات والمحافظ' me.xml
-
-            python3 /tmp/tap.py 'الأمان والنسخ'
-            sleep 2
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb pull /sdcard/window.xml security.xml >/dev/null
-            grep -q 'حماية حقيقية وفشل مغلق' security.xml
-            grep -q 'القفل التلقائي' security.xml
-
-            adb shell input keyevent KEYCODE_BACK
-            sleep 1
-            python3 /tmp/tap.py 'الاستيراد والتصدير'
-            sleep 2
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb pull /sdcard/window.xml export.xml >/dev/null
-            grep -q 'ملفات حقيقية' export.xml
-            grep -q 'Excel XLSX' export.xml
+            grep -q 'Flosi' entry.xml
+            grep -Eq 'المتابعة باستخدام Google|تسجيل الدخول|أموالك، بحساب موثّق' entry.xml
 
             adb shell input keyevent KEYCODE_HOME
             sleep 2
             adb shell monkey -p com.flosi.app -c android.intent.category.LAUNCHER 1 >/dev/null
             sleep 3
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null
+            adb pull /sdcard/window.xml resumed.xml >/dev/null
+            grep -q 'Flosi' resumed.xml
+
             adb logcat -d > runtime-logcat.txt
             if grep -E 'FATAL EXCEPTION|ANR in com\.flosi\.app' runtime-logcat.txt; then exit 3; fi
-            echo FLOSI_EMULATOR_RUNTIME_PASS
+            echo FLOSI_ANDROID_ENTRY_RUNTIME_PASS
+
       - name: Upload runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -89,8 +64,6 @@ jobs:
           name: flosi-emulator-runtime-evidence
           path: |
             launch.txt
-            home.xml
-            me.xml
-            security.xml
-            export.xml
+            entry.xml
+            resumed.xml
             runtime-logcat.txt
