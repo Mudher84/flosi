@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
 import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.i18n.flosiText
@@ -65,7 +66,7 @@ fun CommitmentsScreen(onBack:()->Unit,onEdit:()->Unit){
                         },
                         enabled=!busy&&account!=null&&!insufficient
                     ){
-                        if(payingId==item.id) CircularProgressIndicator(strokeWidth=2f)
+                        if(payingId==item.id) CircularProgressIndicator(strokeWidth=2.dp)
                         else Text(when{
                             account==null->if(lang=="ar")"اربط حساباً قبل الدفع" else "Link an account before paying"
                             insufficient->if(lang=="ar")"الرصيد غير كافٍ" else "Insufficient balance"
