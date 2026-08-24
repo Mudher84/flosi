@@ -22,8 +22,8 @@ import com.flosi.app.ui.viewmodel.flosiViewModel
 fun AddTransactionScreen(
     onBack:()->Unit,
     onPickAccount:()->Unit,
-    onPickPerson:()->Unit,
-    onPickCategory:()->Unit,
+    onPickPerson:(String?)->Unit,
+    onPickCategory:(String)->Unit,
     pickedAccountId:Long?=null,
     pickedPersonId:Long?=null,
     pickedCategoryId:Long?=null
@@ -84,25 +84,29 @@ fun AddTransactionScreen(
 
         CardBox{
             Text(flosiText("account"))
-            if(accounts.isEmpty()) Text(s("لا يوجد حساب. أضف حساباً أولاً.","No account exists. Add an account first."),color=FlosiRed)
-            Column(verticalArrangement=Arrangement.spacedBy(4.dp)){
-                accounts.take(4).forEach{account->FilterChip(accountId==account.id,{accountId=account.id;personId=null;error=null},{Text("${account.name} • ${account.currency}")})}
+            if(accounts.isEmpty()) {
+                Text(s("لا يوجد حساب. أضف حساباً أولاً.","No account exists. Add an account first."),color=FlosiRed)
+                TextButton(onClick=onPickAccount){Text(s("إضافة حساب","Add account"))}
+            } else {
+                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){
+                    accounts.take(4).forEach{account->FilterChip(accountId==account.id,{accountId=account.id;personId=null;error=null},{Text("${account.name} • ${account.currency}")})}
+                }
+                if(accounts.size>4) TextButton(onClick=onPickAccount){Text(s("عرض كل الحسابات","View all accounts"))}
             }
-            if(accounts.size>4) TextButton(onClick=onPickAccount){Text(s("عرض كل الحسابات","View all accounts"))}
 
             Text(s("الشخص — اختياري","Person — optional"))
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 FilterChip(personId==null,{personId=null;error=null},{Text(s("بدون","None"))})
                 eligiblePeople.take(3).forEach{person->FilterChip(personId==person.id,{personId=person.id;error=null},{Text(person.name)})}
             }
-            if(eligiblePeople.size>3) TextButton(onClick=onPickPerson){Text(s("عرض كل الأشخاص بنفس العملة","View all people in this currency"))}
+            if(eligiblePeople.size>3) TextButton(onClick={onPickPerson(selectedAccount?.currency)}){Text(s("عرض كل الأشخاص بنفس العملة","View all people in this currency"))}
             if(people.isNotEmpty()&&eligiblePeople.isEmpty())Text(s("لا يوجد شخص بعملة ${selectedAccount?.currency.orEmpty()}.","No person uses ${selectedAccount?.currency.orEmpty()}."),color=FlosiMuted)
 
             Text(flosiText("category"))
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 eligibleCategories.take(4).forEach{category->FilterChip(categoryId==category.id,{categoryId=category.id;error=null},{Text(category.name)})}
             }
-            if(eligibleCategories.size>4) TextButton(onClick=onPickCategory){Text(s("عرض كل التصنيفات","View all categories"))}
+            if(eligibleCategories.size>4) TextButton(onClick={onPickCategory(kind)}){Text(s("عرض كل التصنيفات","View all categories"))}
             if(eligibleCategories.isEmpty()) Text(s("يمكن الحفظ بدون تصنيف.","You can save without a category."),color=FlosiMuted)
         }
 
