@@ -8,11 +8,16 @@ import com.flosi.app.i18n.FlosiLocales
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.Currency
+import java.util.Locale
 
 private val Context.flosiDataStore by preferencesDataStore(name="flosi_preferences")
 
+private fun deviceDefaultCurrency():String = runCatching {
+    Currency.getInstance(Locale.getDefault()).currencyCode.uppercase(Locale.ROOT)
+}.getOrDefault("USD")
+
 data class FlosiPreferencesState(
-    val currency: String = "IQD",
+    val currency: String = "USD",
     val language: String = "ar",
     val biometricLock: Boolean = false,
     val hideRecents: Boolean = false,
@@ -40,13 +45,14 @@ class FlosiPreferences(private val context: Context) {
 
     private fun validCurrency(raw:String):String {
         val code=CurrencyConverter.normalizeCode(raw)
-        return runCatching { Currency.getInstance(code);code }.getOrDefault("IQD")
+        return runCatching { Currency.getInstance(code);code }.getOrDefault(deviceDefaultCurrency())
     }
 
     val state: Flow<FlosiPreferencesState> = context.flosiDataStore.data.map { p ->
         val rawLanguage = p[Keys.language] ?: "ar"
+        val fallbackCurrency=deviceDefaultCurrency()
         FlosiPreferencesState(
-            currency=validCurrency(p[Keys.currency] ?: "IQD"),
+            currency=validCurrency(p[Keys.currency] ?: fallbackCurrency),
             language=if(FlosiLocales.isSupported(rawLanguage)) rawLanguage else "ar",
             biometricLock=p[Keys.biometric] ?: false,
             hideRecents=p[Keys.hideRecents] ?: false,
