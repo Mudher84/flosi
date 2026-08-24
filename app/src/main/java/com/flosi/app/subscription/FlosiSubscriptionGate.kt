@@ -25,6 +25,7 @@ import kotlin.math.ceil
 private const val TRIAL_DAYS = 30L
 private const val DAY_MS = 86_400_000L
 private const val ENTITLEMENT_GRACE_MS = 3L * DAY_MS
+private const val TRIAL_ROLLOUT_MS = 1_787_574_600_000L // 2026-08-24 12:30 UTC
 
 sealed interface SubscriptionState {
     data object Checking : SubscriptionState
@@ -104,7 +105,8 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
             return
         }
         val now = trustedNow(user)
-        val expiry = createdAt + TRIAL_DAYS * DAY_MS
+        val trialStart = maxOf(createdAt, TRIAL_ROLLOUT_MS)
+        val expiry = trialStart + TRIAL_DAYS * DAY_MS
         if (now < expiry) {
             val days = ceil((expiry - now).toDouble() / DAY_MS.toDouble()).toInt().coerceAtLeast(1)
             _state.value = SubscriptionState.Trial(days)
