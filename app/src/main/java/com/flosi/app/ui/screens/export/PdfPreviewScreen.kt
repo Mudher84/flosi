@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.flosi.app.export.PdfExporter
 import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.ui.components.*
@@ -45,7 +46,7 @@ fun PdfPreviewScreen(invoiceId:Long,onBack:()->Unit){
     }
     FlosiPage(s("معاينة PDF","PDF preview"),s("فاتورة جاهزة للحفظ والمشاركة","Invoice ready to save and share"),onBack){
         inv?.let{i->
-            val currency=i.currency.trim().uppercase().ifBlank{"IQD"}
+            val currency=i.currency.trim().uppercase()
             CardBox{
                 Metric("${s("فاتورة","Invoice")} #${i.number}",moneyText(i.total,currency),FlosiPurple)
                 Text("${s("الحالة","Status")}: ${statusLabel(i.status)} • ${s("العملة","Currency")}: $currency",color=FlosiMuted)
