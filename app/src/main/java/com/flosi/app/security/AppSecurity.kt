@@ -33,7 +33,16 @@ object AppSecurity {
     fun biometricEnabled(context: Context): Boolean = prefs(context).getBoolean(K_BIOMETRIC, false)
     fun screenSecureEnabled(context: Context): Boolean = prefs(context).getBoolean(K_SCREEN_SECURE, true)
     fun autoLockSeconds(context: Context): Int = prefs(context).getInt(K_AUTO_LOCK_SECONDS, 0).coerceAtLeast(0)
-    fun protectionConfigured(context: Context): Boolean = hasPin(context) || biometricEnabled(context)
+
+    /**
+     * A configured protection method must also have a usable unlock path.
+     * Old installs could enable biometrics without a PIN. If the biometric sensor later
+     * becomes unavailable, treating that stale flag as a lock would permanently lock the
+     * user out. New biometric enrollment requires a PIN fallback; legacy biometric-only
+     * installs are considered protected only while biometrics are actually available.
+     */
+    fun protectionConfigured(context: Context): Boolean =
+        hasPin(context) || (biometricEnabled(context) && biometricAvailable(context))
 
     fun biometricStatus(context: Context): Int = BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
     fun biometricAvailable(context: Context): Boolean = biometricStatus(context) == BiometricManager.BIOMETRIC_SUCCESS
@@ -55,8 +64,14 @@ object AppSecurity {
     }
 
     fun clearPin(context: Context) {
-        prefs(context).edit().remove(K_PIN_SALT).remove(K_PIN_HASH).remove(K_PIN_FAILURES).remove(K_PIN_LOCKOUT_UNTIL).apply()
-        if (!biometricEnabled(context)) sessionUnlocked = true
+        // A biometric-only configuration can become impossible to unlock if the sensor is
+        // removed/disabled. Clearing PIN therefore also disables biometric app-lock.
+        prefs(context).edit()
+            .remove(K_PIN_SALT).remove(K_PIN_HASH)
+            .remove(K_PIN_FAILURES).remove(K_PIN_LOCKOUT_UNTIL)
+            .putBoolean(K_BIOMETRIC, false)
+            .apply()
+        sessionUnlocked = true
     }
 
     fun pinRetryAfterSeconds(context:Context):Long {
@@ -98,7 +113,10 @@ object AppSecurity {
     }
 
     fun setBiometricEnabled(context: Context, enabled: Boolean) {
-        if (enabled) require(biometricAvailable(context)) { "القياسات الحيوية غير متاحة على هذا الجهاز" }
+        if (enabled) {
+            require(hasPin(context)) { "فعّل PIN أولاً ليكون وسيلة احتياطية إذا تعطلت البصمة أو الوجه" }
+            require(biometricAvailable(context)) { "القياسات الحيوية غير متاحة على هذا الجهاز" }
+        }
         prefs(context).edit().putBoolean(K_BIOMETRIC, enabled).apply()
         if (!enabled && !hasPin(context)) sessionUnlocked = true
     }
