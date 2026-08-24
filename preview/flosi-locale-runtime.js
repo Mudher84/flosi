@@ -1,212 +1,50 @@
 (()=>{
 'use strict';
-if(window.__FLOSI_LOCALE_RUNTIME__) return;
 window.__FLOSI_LOCALE_RUNTIME__=true;
-
 const I18N=window.FLOSI_I18N||{};
-const LEGACY_SOURCE_CURRENCY='USD';
-const PREVIEW_SOURCE_KEY='flosi-preview-source-currency-v1';
-const localeMeta=window.localeMeta||{
-  ar:{label:'العربية',locale:'ar-IQ',dir:'rtl'},en:{label:'English',locale:'en-US',dir:'ltr'},
-  'zh-CN':{label:'简体中文',locale:'zh-CN',dir:'ltr'},es:{label:'Español',locale:'es-ES',dir:'ltr'},
-  fr:{label:'Français',locale:'fr-FR',dir:'ltr'},de:{label:'Deutsch',locale:'de-DE',dir:'ltr'},
-  tr:{label:'Türkçe',locale:'tr-TR',dir:'ltr'},fa:{label:'فارسی',locale:'fa-IR',dir:'rtl'},
-  ur:{label:'اردو',locale:'ur-PK',dir:'rtl'},hi:{label:'हिन्दी',locale:'hi-IN',dir:'ltr'},
-  pt:{label:'Português',locale:'pt-BR',dir:'ltr'},it:{label:'Italiano',locale:'it-IT',dir:'ltr'},
-  ru:{label:'Русский',locale:'ru-RU',dir:'ltr'},ja:{label:'日本語',locale:'ja-JP',dir:'ltr'},
-  ko:{label:'한국어',locale:'ko-KR',dir:'ltr'},id:{label:'Bahasa Indonesia',locale:'id-ID',dir:'ltr'},
-  ms:{label:'Bahasa Melayu',locale:'ms-MY',dir:'ltr'},bn:{label:'বাংলা',locale:'bn-BD',dir:'ltr'},
-  nl:{label:'Nederlands',locale:'nl-NL',dir:'ltr'},pl:{label:'Polski',locale:'pl-PL',dir:'ltr'},
-  sv:{label:'Svenska',locale:'sv-SE',dir:'ltr'},th:{label:'ไทย',locale:'th-TH',dir:'ltr'},
-  vi:{label:'Tiếng Việt',locale:'vi-VN',dir:'ltr'},he:{label:'עברית',locale:'he-IL',dir:'rtl'}
+const META={
+ ar:{locale:'ar-IQ',dir:'rtl',font:'Cairo,"Noto Sans Arabic",sans-serif'},en:{locale:'en-US',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},'zh-CN':{locale:'zh-CN',dir:'ltr',font:'"Noto Sans SC","Noto Sans",sans-serif'},es:{locale:'es-ES',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},fr:{locale:'fr-FR',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},de:{locale:'de-DE',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},tr:{locale:'tr-TR',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},fa:{locale:'fa-IR',dir:'rtl',font:'"Noto Sans Arabic",Cairo,sans-serif'},ur:{locale:'ur-PK',dir:'rtl',font:'"Noto Sans Arabic",Cairo,sans-serif'},hi:{locale:'hi-IN',dir:'ltr',font:'"Noto Sans Devanagari","Noto Sans",sans-serif'},pt:{locale:'pt-BR',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},it:{locale:'it-IT',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},ru:{locale:'ru-RU',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},ja:{locale:'ja-JP',dir:'ltr',font:'"Noto Sans JP","Noto Sans",sans-serif'},ko:{locale:'ko-KR',dir:'ltr',font:'"Noto Sans KR","Noto Sans",sans-serif'},id:{locale:'id-ID',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},ms:{locale:'ms-MY',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},bn:{locale:'bn-BD',dir:'ltr',font:'"Noto Sans Bengali","Noto Sans",sans-serif'},nl:{locale:'nl-NL',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},pl:{locale:'pl-PL',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},sv:{locale:'sv-SE',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},th:{locale:'th-TH',dir:'ltr',font:'"Noto Sans Thai","Noto Sans",sans-serif'},vi:{locale:'vi-VN',dir:'ltr',font:'Inter,"Noto Sans",sans-serif'},he:{locale:'he-IL',dir:'rtl',font:'"Noto Sans Hebrew","Noto Sans",sans-serif'}
 };
-
-const originalText=new WeakMap();
-const originalBare=new WeakMap();
-let applying=false;
-let observer=null;
-
-const manual={ar:{
-  'Daily Money Brief':'الملخص المالي اليومي','Flosi Intelligence':'ذكاء Flosi المالي',
-  'Smart Money OS':'نظام المال الذكي','Main':'الحساب الرئيسي','Cash':'نقداً',
-  'Settings & privacy':'الإعدادات والخصوصية','Global settings':'إعدادات عالمية',
-  'Base currency':'العملة الأساسية','App language':'لغة التطبيق','Recent transactions':'آخر الحركات',
-  'Transactions':'الحركات','Reports':'التقارير','Security':'الأمان'
-}};
-
-function committedState(){
-  const lang=localStorage.getItem('flosi-lang')||'ar';
-  const currency=(localStorage.getItem('flosi-currency')||'IQD').toUpperCase();
-  const meta=localeMeta[lang]||localeMeta.ar;
-  return {lang,currency,meta};
-}
-function state(){
-  const committed=committedState();
-  const lang=localStorage.getItem('flosi-lang-preview')||committed.lang;
-  const currency=(localStorage.getItem('flosi-currency-preview')||committed.currency).toUpperCase();
-  return {lang,currency,meta:localeMeta[lang]||localeMeta.ar};
-}
-function sourceCurrency(){return (localStorage.getItem(PREVIEW_SOURCE_KEY)||committedState().currency||'IQD').toUpperCase()}
-function safeNumber(raw){
-  const n=Number(String(raw).replace(/,/g,'').replace(/\s/g,''));
-  return Number.isFinite(n)?n:null;
-}
-function fractionDigits(currency){return ['IQD','JPY','KRW'].includes(currency)?0:2}
-function money(n,currency,locale){
-  try{return new Intl.NumberFormat(locale,{style:'currency',currency,maximumFractionDigits:fractionDigits(currency)}).format(n)}
-  catch(_){return `${Number(n).toLocaleString(locale)} ${currency}`}
-}
-function rateKey(from,to){return `flosi-fx-${String(from).toUpperCase()}-${String(to).toUpperCase()}`}
-function getRate(currency){
-  const source=sourceCurrency(),target=String(currency||'').toUpperCase();
-  if(target===source)return 1;
-  const direct=Number(localStorage.getItem(rateKey(source,target))||'');
-  if(Number.isFinite(direct)&&direct>0)return direct;
-  const reverse=Number(localStorage.getItem(rateKey(target,source))||'');
-  return Number.isFinite(reverse)&&reverse>0?1/reverse:null;
-}
-function convertValue(value,currency){
-  const rate=getRate(currency);
-  return rate===null?null:value*rate;
-}
-function formatConverted(value,currency,locale){
-  const converted=convertValue(value,currency);
-  return converted===null?null:money(converted,currency,locale);
-}
-function currencyText(text,currency,locale){
-  const source=sourceCurrency();
-  if(currency===source)return text;
-  if(source!==LEGACY_SOURCE_CURRENCY||getRate(currency)===null)return text;
-  let out=text;
-  out=out.replace(/([+−-]?\d[\d,]*(?:\.\d+)?)\s*\/\s*([+−-]?\d[\d,]*(?:\.\d+)?)\s+USD\b/g,(m,a,b)=>{
-    const na=safeNumber(a.replace(/[+−-]/g,'')),nb=safeNumber(b.replace(/[+−-]/g,''));
-    if(na===null||nb===null)return m;
-    return `${formatConverted(na,currency,locale)} / ${formatConverted(nb,currency,locale)}`;
-  });
-  out=out.replace(/\bUSD\s*([+−-]?\d[\d,]*(?:\.\d+)?)/g,(m,a)=>{
-    const sign=/^[+]/.test(a)?'+':/^[−-]/.test(a)?'−':'';
-    const n=safeNumber(a.replace(/[+−-]/g,''));
-    const v=n===null?null:formatConverted(n,currency,locale);
-    return v===null?m:sign+v;
-  });
-  out=out.replace(/([+−-]?\d[\d,]*(?:\.\d+)?)\s+USD\b/g,(m,a)=>{
-    const sign=/^[+]/.test(a)?'+':/^[−-]/.test(a)?'−':'';
-    const n=safeNumber(a.replace(/[+−-]/g,''));
-    const v=n===null?null:formatConverted(n,currency,locale);
-    return v===null?m:sign+v;
-  });
-  return out;
-}
-function buildReverse(){
-  const reverse=new Map();
-  ['ar','en'].forEach(code=>{const t=I18N[code]&&I18N[code].t;if(!t)return;Object.entries(t).forEach(([k,v])=>{if(typeof v==='string')reverse.set(v,k)})});
-  return reverse;
-}
-function translateExact(text,lang,reverse){
-  const trimmed=text.trim();if(!trimmed)return text;
-  let replacement=null;const key=reverse.get(trimmed);
-  if(key&&I18N[lang]&&I18N[lang].t&&I18N[lang].t[key])replacement=I18N[lang].t[key];
-  if(!replacement&&manual[lang]&&manual[lang][trimmed])replacement=manual[lang][trimmed];
-  if(!replacement)return text;const start=text.indexOf(trimmed);
-  return text.slice(0,start)+replacement+text.slice(start+trimmed.length);
-}
-function shouldSkip(node){const p=node.parentElement;return !p||!!p.closest('script,style,option,select,textarea,input,[data-locale-no-transform]')}
-function applyText(root=document.body){
-  if(!root)return;const {lang,currency,meta}=state();const reverse=buildReverse();
-  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
-  nodes.forEach(node=>{if(shouldSkip(node))return;if(!originalText.has(node))originalText.set(node,node.nodeValue||'');const base=originalText.get(node)||'';let next=translateExact(base,lang,reverse);next=currencyText(next,currency,meta.locale);if(node.nodeValue!==next)node.nodeValue=next});
-}
-function signedBare(raw,currency,locale){
-  const sign=raw.trim().startsWith('+')?'+':raw.trim().startsWith('−')||raw.trim().startsWith('-')?'−':'';
-  const n=safeNumber(raw.replace(/[+−-]/g,''));if(n===null)return raw;
-  if(n===0)return sign+money(0,currency,locale);
-  const out=formatConverted(n,currency,locale);return out===null?raw:sign+out;
-}
-function applyBareValues(){
-  const {currency,meta}=state();
-  const selectors=['.metric strong','.tx .neg','.tx .pos'];
-  document.querySelectorAll(selectors.join(',')).forEach(el=>{
-    if(!originalBare.has(el))originalBare.set(el,el.textContent||'');
-    const base=originalBare.get(el)||'';
-    if(base.includes('%')){el.textContent=base;return}
-    el.textContent=signedBare(base,currency,meta.locale);
-  });
-}
-function ensureCenteredSelectors(){
-  if(document.getElementById('flosiLocaleCentering'))return;
-  const style=document.createElement('style');style.id='flosiLocaleCentering';
-  style.textContent='#settingsLang,#settingsCurrency{text-align:center!important;text-align-last:center!important;padding-inline:52px!important}#settingsLang option,#settingsCurrency option{text-align:center!important}';
-  document.head.appendChild(style);
-}
-function ensureFxPanel(){
-  const locale=document.getElementById('locale'),preview=document.querySelector('#locale .localePreview');if(!locale||!preview)return;
-  let panel=document.getElementById('previewFxPanel');
-  if(!panel){
-    panel=document.createElement('div');panel.id='previewFxPanel';panel.setAttribute('data-locale-no-transform','');
-    panel.style.cssText='background:#fff;border:1px solid var(--line);border-radius:20px;padding:14px;box-shadow:var(--shadow);margin-top:12px';
-    panel.innerHTML='<div style="display:flex;gap:10px;align-items:flex-start"><div style="width:40px;height:40px;border-radius:13px;background:#fff6e7;color:var(--amber);display:grid;place-items:center;font-size:18px">⇄</div><div style="flex:1"><b style="display:block;font-size:11px">سعر تحويل نسخة العرض</b><small id="previewFxHelp" style="display:block;color:var(--muted);font-size:8px;line-height:1.7;margin-top:2px"></small></div></div><div id="previewFxInputs" style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:11px"><input id="previewFxRate" inputmode="decimal" style="height:46px;border:1px solid #e4d9f7;border-radius:14px;padding:0 12px;outline:0"><button id="previewFxSave" style="border:0;border-radius:14px;background:var(--p);color:#fff;padding:0 15px;font-weight:700">حفظ السعر</button></div><small id="previewFxStatus" style="display:block;margin-top:8px;font-size:8px;color:var(--muted)"></small>';
-    preview.parentNode.insertBefore(panel,preview);
-    panel.querySelector('#previewFxSave').addEventListener('click',()=>{
-      const {currency}=state(),source=sourceCurrency(),input=panel.querySelector('#previewFxRate');
-      const rate=Number(String(input.value||'').replace(',','.'));
-      if(currency===source)return;
-      if(!Number.isFinite(rate)||rate<=0){panel.querySelector('#previewFxStatus').textContent='أدخل سعر صرف أكبر من صفر.';panel.querySelector('#previewFxStatus').style.color='var(--red)';return}
-      localStorage.setItem(rateKey(source,currency),String(rate));panel.querySelector('#previewFxStatus').textContent=`تم حفظ: 1 ${source} = ${rate} ${currency}`;panel.querySelector('#previewFxStatus').style.color='var(--green)';applyDocument();
-    });
-  }
-  const {currency}=state(),source=sourceCurrency(),rate=getRate(currency),inputs=panel.querySelector('#previewFxInputs');
-  panel.style.display=currency===source?'none':'block';if(currency===source)return;
-  panel.querySelector('#previewFxHelp').textContent=`بياناتك الحالية محفوظة بعملة ${source}. التحويل إلى ${currency} يحتاج سعر صرف.`;
-  panel.querySelector('#previewFxRate').value=rate===null?'':String(rate);
-  panel.querySelector('#previewFxRate').placeholder=`1 ${source} = ? ${currency}`;
-  inputs.style.display='grid';
-  panel.querySelector('#previewFxStatus').textContent=rate===null?`لا يوجد سعر محفوظ بين ${source} و ${currency}.`:`نشط: 1 ${source} = ${rate} ${currency}`;
-  panel.querySelector('#previewFxStatus').style.color=rate===null?'var(--amber)':'var(--green)';
-}
-function syncControls(){
-  const {lang,currency}=state();const ls=document.getElementById('settingsLang'),cs=document.getElementById('settingsCurrency');
-  if(ls&&[...ls.options].some(o=>o.value===lang))ls.value=lang;if(cs&&[...cs.options].some(o=>o.value===currency))cs.value=currency;
-}
-function fixLocalePreview(){
-  const {currency,meta}=state(),amount=document.getElementById('localeAmountPreview'),compact=document.getElementById('localeCompactPreview');
-  if(!amount||!compact)return;
-  amount.textContent=money(0,currency,meta.locale);
-  compact.textContent=money(0,currency,meta.locale);
-}
-function applyDocument(){
-  if(applying)return;applying=true;
-  try{
-    const {lang,meta}=state();document.documentElement.lang=lang;document.documentElement.dir=meta.dir;document.body&&document.body.setAttribute('dir',meta.dir);
-    ensureCenteredSelectors();syncControls();if(typeof window.renderLocale==='function'){try{window.renderLocale()}catch(_){}}
-    applyText(document.body);applyBareValues();ensureFxPanel();fixLocalePreview();
-    if(typeof window.FLOSI_LATINIZE_DIGITS==='function')window.FLOSI_LATINIZE_DIGITS();
-  }finally{applying=false}
-}
-function saveFromControls(){
-  const ls=document.getElementById('settingsLang'),cs=document.getElementById('settingsCurrency');
-  if(ls)localStorage.setItem('flosi-lang',ls.value);if(cs)localStorage.setItem('flosi-currency',cs.value);
-  const meta=localeMeta[(ls&&ls.value)||'ar']||localeMeta.ar;localStorage.setItem('flosi-dir',meta.dir);localStorage.setItem('flosi-locale',meta.locale);
-  localStorage.removeItem('flosi-lang-preview');localStorage.removeItem('flosi-currency-preview');applyDocument();
-}
-function bind(){
-  document.addEventListener('click',e=>{if(e.target.closest('#settingsSaveLocale'))setTimeout(saveFromControls,0)});
-  document.addEventListener('change',e=>{
-    if(!e.target||!['settingsLang','settingsCurrency'].includes(e.target.id))return;
-    const ls=document.getElementById('settingsLang'),cs=document.getElementById('settingsCurrency');
-    if(ls)localStorage.setItem('flosi-lang-preview',ls.value);if(cs)localStorage.setItem('flosi-currency-preview',cs.value);requestAnimationFrame(applyDocument);
-  });
-}
-function startObserver(){
-  observer=new MutationObserver(ms=>{if(applying)return;if(ms.some(m=>m.type==='childList'&&m.addedNodes.length))requestAnimationFrame(applyDocument)});
-  observer.observe(document.body,{childList:true,subtree:true});
-}
-function loadPreviewState(){
-  if(window.__FLOSI_PREVIEW_STATE__||document.getElementById('flosiPreviewStateScript'))return;
-  const script=document.createElement('script');script.id='flosiPreviewStateScript';script.src='flosi-preview-state.js?v=20260823-zero-iqd-1';document.body.appendChild(script);
-}
-
-if(!localStorage.getItem('flosi-lang'))localStorage.setItem('flosi-lang','ar');
-if(!localStorage.getItem('flosi-currency'))localStorage.setItem('flosi-currency','IQD');
-localStorage.removeItem('flosi-lang-preview');localStorage.removeItem('flosi-currency-preview');
-bind();applyDocument();startObserver();loadPreviewState();
+const EXTRA={
+ ar:['الملخص المالي اليومي','هذا ملخص وضعك المالي اليوم','المتاح للصرف بأمان','توقع نهاية الشهر','التزامات قريبة','خلال 3 أيام','قراراتك القادمة','إذا استمريت بنفس المعدل','الرصيد المتوقع بنهاية الشهر','هدف السفر','التزاماتك القادمة','لا توجد التزامات قادمة','ذكاء Flosi المالي'],
+ en:['Daily Money Brief','Here is your financial snapshot for today','Safe to spend','End-of-month forecast','Due soon','Within 3 days','Your next decisions','If you continue at this pace','Expected balance by month end','Travel goal','Upcoming commitments','No upcoming commitments','Flosi Intelligence'],
+ 'zh-CN':['每日财务简报','这是你今天的财务概览','可安心支出','月末预测','即将到期','3天内','你的下一步决策','如果保持当前节奏','预计月末余额','旅行目标','即将到来的承诺','暂无即将到来的承诺','Flosi 智能财务'],
+ es:['Resumen financiero diario','Este es tu resumen financiero de hoy','Disponible para gastar con seguridad','Previsión de fin de mes','Próximos vencimientos','En 3 días','Tus próximas decisiones','Si mantienes este ritmo','Saldo previsto a fin de mes','Objetivo de viaje','Próximos compromisos','No hay compromisos próximos','Inteligencia Flosi'],
+ fr:['Résumé financier quotidien','Voici votre aperçu financier du jour','Disponible à dépenser sans risque','Prévision de fin de mois','Échéances proches','Dans 3 jours','Vos prochaines décisions','Si vous gardez ce rythme','Solde prévu en fin de mois','Objectif voyage','Engagements à venir','Aucun engagement à venir','Intelligence Flosi'],
+ de:['Täglicher Finanzüberblick','Hier ist dein Finanzüberblick für heute','Sicher verfügbar','Monatsendprognose','Bald fällig','Innerhalb von 3 Tagen','Deine nächsten Entscheidungen','Wenn du dieses Tempo beibehältst','Erwarteter Kontostand zum Monatsende','Reiseziel','Anstehende Verpflichtungen','Keine anstehenden Verpflichtungen','Flosi Finanzintelligenz'],
+ tr:['Günlük finans özeti','Bugünkü finansal durumunuzun özeti','Güvenle harcanabilir','Ay sonu tahmini','Yakında vadesi gelenler','3 gün içinde','Sonraki kararlarınız','Bu tempoda devam ederseniz','Ay sonu beklenen bakiye','Seyahat hedefi','Yaklaşan yükümlülükler','Yaklaşan yükümlülük yok','Flosi Finans Zekâsı'],
+ fa:['خلاصه مالی روزانه','این خلاصه وضعیت مالی امروز شماست','مبلغ امن برای خرج','پیش‌بینی پایان ماه','موارد نزدیک به سررسید','تا ۳ روز','تصمیم‌های بعدی شما','اگر با همین روند ادامه دهید','موجودی پیش‌بینی‌شده پایان ماه','هدف سفر','تعهدات پیش رو','تعهدی در پیش نیست','هوش مالی Flosi'],
+ ur:['روزانہ مالی خلاصہ','یہ آج کی آپ کی مالی صورتحال کا خلاصہ ہے','محفوظ طور پر خرچ کے لیے دستیاب','مہینے کے آخر کی پیش گوئی','قریب واجب الادا','3 دن کے اندر','آپ کے اگلے فیصلے','اگر آپ اسی رفتار سے جاری رکھیں','مہینے کے آخر میں متوقع بیلنس','سفر کا ہدف','آنے والی ذمہ داریاں','کوئی آنے والی ذمہ داری نہیں','Flosi مالی ذہانت'],
+ hi:['दैनिक वित्तीय सारांश','यह आज की आपकी वित्तीय स्थिति का सार है','सुरक्षित रूप से खर्च योग्य','माह-अंत पूर्वानुमान','जल्द देय','3 दिनों के भीतर','आपके अगले निर्णय','यदि आप इसी गति से जारी रखते हैं','माह के अंत का अपेक्षित शेष','यात्रा लक्ष्य','आगामी प्रतिबद्धताएँ','कोई आगामी प्रतिबद्धता नहीं','Flosi वित्तीय बुद्धिमत्ता'],
+ pt:['Resumo financeiro diário','Este é o seu resumo financeiro de hoje','Disponível para gastar com segurança','Previsão para o fim do mês','Vencimentos próximos','Em até 3 dias','Suas próximas decisões','Se continuar neste ritmo','Saldo previsto no fim do mês','Meta de viagem','Compromissos futuros','Nenhum compromisso futuro','Inteligência Flosi'],
+ it:['Riepilogo finanziario giornaliero','Ecco il tuo riepilogo finanziario di oggi','Disponibile da spendere in sicurezza','Previsione di fine mese','Scadenze vicine','Entro 3 giorni','Le tue prossime decisioni','Se continui con questo ritmo','Saldo previsto a fine mese','Obiettivo viaggio','Impegni in arrivo','Nessun impegno in arrivo','Intelligenza Flosi'],
+ ru:['Ежедневная финансовая сводка','Это краткий обзор ваших финансов на сегодня','Можно безопасно потратить','Прогноз на конец месяца','Скоро к оплате','В течение 3 дней','Ваши следующие решения','Если продолжите в том же темпе','Ожидаемый баланс к концу месяца','Цель на путешествие','Предстоящие обязательства','Предстоящих обязательств нет','Финансовый интеллект Flosi'],
+ ja:['毎日の資産サマリー','今日の財務状況の概要です','安心して使える金額','月末予測','まもなく期限','3日以内','次の判断','このペースを続けた場合','月末の予想残高','旅行目標','今後の支払い予定','今後の支払い予定はありません','Flosi ファイナンスインテリジェンス'],
+ ko:['일일 금융 요약','오늘의 금융 상태 요약입니다','안전하게 지출 가능','월말 예상','곧 만기','3일 이내','다음 결정','현재 속도를 유지하면','월말 예상 잔액','여행 목표','예정된 약정','예정된 약정이 없습니다','Flosi 금융 인텔리전스'],
+ id:['Ringkasan keuangan harian','Ini ringkasan kondisi keuangan Anda hari ini','Aman untuk dibelanjakan','Perkiraan akhir bulan','Segera jatuh tempo','Dalam 3 hari','Keputusan Anda berikutnya','Jika Anda mempertahankan ritme ini','Perkiraan saldo akhir bulan','Target perjalanan','Komitmen mendatang','Tidak ada komitmen mendatang','Kecerdasan Finansial Flosi'],
+ ms:['Ringkasan kewangan harian','Ini ringkasan kewangan anda untuk hari ini','Selamat untuk dibelanjakan','Ramalan hujung bulan','Akan tiba tempoh','Dalam 3 hari','Keputusan anda seterusnya','Jika anda meneruskan kadar ini','Baki dijangka hujung bulan','Matlamat perjalanan','Komitmen akan datang','Tiada komitmen akan datang','Kecerdasan Kewangan Flosi'],
+ bn:['দৈনিক আর্থিক সারাংশ','এটি আজকের আপনার আর্থিক অবস্থার সারাংশ','নিরাপদে খরচ করা যাবে','মাসশেষের পূর্বাভাস','শীঘ্রই পরিশোধযোগ্য','৩ দিনের মধ্যে','আপনার পরবর্তী সিদ্ধান্ত','এই গতিতে চললে','মাসশেষে প্রত্যাশিত ব্যালেন্স','ভ্রমণ লক্ষ্য','আসন্ন অঙ্গীকার','কোনো আসন্ন অঙ্গীকার নেই','Flosi আর্থিক বুদ্ধিমত্তা'],
+ nl:['Dagelijks financieel overzicht','Dit is je financiële overzicht van vandaag','Veilig te besteden','Prognose einde maand','Binnenkort verschuldigd','Binnen 3 dagen','Je volgende beslissingen','Als je dit tempo aanhoudt','Verwacht saldo eind van de maand','Reisdoel','Aankomende verplichtingen','Geen aankomende verplichtingen','Flosi Financiële Intelligentie'],
+ pl:['Codzienne podsumowanie finansowe','Oto dzisiejszy przegląd Twoich finansów','Bezpiecznie do wydania','Prognoza na koniec miesiąca','Wkrótce płatne','W ciągu 3 dni','Twoje kolejne decyzje','Jeśli utrzymasz to tempo','Przewidywane saldo na koniec miesiąca','Cel podróży','Nadchodzące zobowiązania','Brak nadchodzących zobowiązań','Inteligencja Finansowa Flosi'],
+ sv:['Daglig ekonomisk översikt','Här är din ekonomiska översikt för idag','Säkert att spendera','Prognos för månadsslut','Förfaller snart','Inom 3 dagar','Dina nästa beslut','Om du fortsätter i samma takt','Förväntat saldo vid månadsslut','Resmål','Kommande åtaganden','Inga kommande åtaganden','Flosi Finansiell Intelligens'],
+ th:['สรุปการเงินประจำวัน','นี่คือภาพรวมการเงินของคุณในวันนี้','ใช้จ่ายได้อย่างปลอดภัย','คาดการณ์สิ้นเดือน','ใกล้ถึงกำหนด','ภายใน 3 วัน','การตัดสินใจถัดไปของคุณ','หากยังคงอัตรานี้','ยอดคงเหลือที่คาดไว้สิ้นเดือน','เป้าหมายการเดินทาง','ภาระผูกพันที่กำลังจะมาถึง','ไม่มีภาระผูกพันที่กำลังจะมาถึง','Flosi ข่าวกรองทางการเงิน'],
+ vi:['Tóm tắt tài chính hằng ngày','Đây là tổng quan tài chính của bạn hôm nay','Có thể chi tiêu an toàn','Dự báo cuối tháng','Sắp đến hạn','Trong 3 ngày','Quyết định tiếp theo của bạn','Nếu bạn tiếp tục với nhịp độ này','Số dư dự kiến cuối tháng','Mục tiêu du lịch','Cam kết sắp tới','Không có cam kết sắp tới','Trí tuệ Tài chính Flosi'],
+ he:['סיכום פיננסי יומי','זהו סיכום המצב הפיננסי שלך להיום','בטוח להוצאה','תחזית לסוף החודש','מועד קרוב','בתוך 3 ימים','ההחלטות הבאות שלך','אם תמשיך בקצב הזה','יתרה צפויה בסוף החודש','יעד נסיעה','התחייבויות קרובות','אין התחייבויות קרובות','האינטליגנציה הפיננסית של Flosi']
+};
+const ALIAS=new Map([
+ ['صافي أموالك','total'],['إجمالي أموالك','total'],['الدخل هذا الشهر','income'],['المصروف هذا الشهر','expense'],['المصروفات هذا الشهر','expense'],['نسبة الادخار','savings'],['كل أموالك','allAccounts'],['الخصوصية والتخصيص','settingsPrivacy'],['اللغة والعملة','languageCurrency'],['الأمان','security'],['التقارير والجداول','reportsTables'],['إعدادات عالمية','globalSettings'],['لغة التطبيق','appLanguage'],['العملة الأساسية','baseCurrency'],['إضافة حركة','addTransaction'],['البيان','description'],['المبلغ','amount'],['التصنيف','category'],['الحساب','account'],['الحركات','transactions'],['التقارير','reports'],['التسوق','shopping'],['راتب','salary'],['اليوم','today'],['حفظ','save'],['إلغاء','cancel'],['الحساب الرئيسي','mainAccount'],['المصروف','expense'],['دخل','income'],['مصروف','expense'],['الخصوصية','privacy'],['البصمة والوجه','biometrics'],['القفل التلقائي','autoLock'],['حماية لقطات الشاشة','blockShots']
+]);
+const EXTRA_ALIAS=new Map([
+ ['Daily Money Brief',0],['الملخص المالي اليومي',0],['هذا ملخص وضعك المالي اليوم',1],['المتاح للصرف بأمان',2],['توقع نهاية الشهر',3],['الالتزامات قريبة',4],['خلال 3 أيام',5],['قراراتك القادمة',6],['إذا استمريت بنفس المعدل',7],['الرصيد المتوقع بنهاية الشهر',8],['هدف السفر',9],['التزاماتك القادمة',10],['لا توجد التزامات قادمة',11],['Flosi Intelligence',12],['ذكاء Flosi المالي',12]
+]);
+function addFonts(){if(document.getElementById('flosiUniversalFonts'))return;const l=document.createElement('link');l.id='flosiUniversalFonts';l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@400;500;600;700&display=swap';document.head.appendChild(l)}
+function currentLang(){const s=document.getElementById('settingsLang');return s?.value||localStorage.getItem('flosi-lang-preview')||localStorage.getItem('flosi-lang')||'ar'}
+function currentCurrency(){const s=document.getElementById('settingsCurrency');return (s?.value||localStorage.getItem('flosi-currency-preview')||localStorage.getItem('flosi-currency')||'IQD').toUpperCase()}
+function reverseMap(){const r=new Map();Object.values(I18N).forEach(p=>{if(p?.t)Object.entries(p.t).forEach(([k,v])=>{if(typeof v==='string')r.set(v.trim(),k)})});return r}
+function translateNodeText(text,lang,rev){const raw=text.trim();if(!raw)return text;const pack=I18N[lang]?.t||{};const k=rev.get(raw)||ALIAS.get(raw);let out=k&&pack[k];if(!out&&EXTRA_ALIAS.has(raw))out=EXTRA[lang]?.[EXTRA_ALIAS.get(raw)];if(!out)return text;const i=text.indexOf(raw);return text.slice(0,i)+out+text.slice(i+raw.length)}
+function formatMoney(value,currency,locale){const fd=['IQD','JPY','KRW'].includes(currency)?0:2;try{return new Intl.NumberFormat(locale,{style:'currency',currency,maximumFractionDigits:fd}).format(value)}catch(_){return `${value} ${currency}`}}
+function applyLocale(){if(!document.body)return;const lang=currentLang(),currency=currentCurrency(),meta=META[lang]||META.en;document.documentElement.lang=lang;document.documentElement.dir=meta.dir;document.body.dir=meta.dir;document.body.style.fontFamily=meta.font;document.documentElement.style.setProperty('--flosi-locale-font',meta.font);document.querySelectorAll('button,input,select,textarea').forEach(el=>el.style.fontFamily='var(--flosi-locale-font)');const rev=reverseMap();const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT),nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);nodes.forEach(n=>{const p=n.parentElement;if(!p||p.closest('script,style,option,select,textarea,input,#locale'))return;const next=translateNodeText(n.nodeValue||'',lang,rev);if(next!==n.nodeValue)n.nodeValue=next});const amount=document.getElementById('localeAmountPreview'),compact=document.getElementById('localeCompactPreview'),date=document.getElementById('localeDatePreview'),dir=document.getElementById('localeDirectionPreview');if(amount)amount.textContent=formatMoney(0,currency,meta.locale);if(compact)compact.textContent=formatMoney(0,currency,meta.locale);if(date)try{date.textContent=new Intl.DateTimeFormat(meta.locale,{year:'numeric',month:'short',day:'numeric'}).format(new Date(2026,7,23))}catch(_){}if(dir)dir.textContent=meta.dir==='rtl'?(I18N[lang]?.t?.rtl||'RTL'):(I18N[lang]?.t?.ltr||'LTR');try{window.FLOSI_RENDER_LOCALE_PAGE?.()}catch(_){}}
+function schedule(){requestAnimationFrame(()=>setTimeout(applyLocale,0))}
+function save(){const l=document.getElementById('settingsLang'),c=document.getElementById('settingsCurrency');if(l)localStorage.setItem('flosi-lang',l.value);if(c)localStorage.setItem('flosi-currency',c.value);localStorage.removeItem('flosi-lang-preview');localStorage.removeItem('flosi-currency-preview');schedule()}
+addFonts();if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();document.addEventListener('change',e=>{if(e.target?.id==='settingsLang'){localStorage.setItem('flosi-lang-preview',e.target.value);schedule()}if(e.target?.id==='settingsCurrency'){localStorage.setItem('flosi-currency-preview',e.target.value);schedule()}});document.addEventListener('click',e=>{if(e.target.closest('#settingsSaveLocale'))setTimeout(save,0);if(e.target.closest('[data-go],#localeApplySmart'))schedule()});window.FLOSI_APPLY_GLOBAL_LOCALE=applyLocale;
 })();
