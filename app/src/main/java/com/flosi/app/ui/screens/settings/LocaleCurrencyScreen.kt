@@ -7,8 +7,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
-import com.flosi.app.i18n.FlosiLocales
-import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.i18n.flosiText
 import com.flosi.app.settings.FlosiPreferencesState
 import com.flosi.app.ui.components.*
@@ -20,41 +18,30 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
     val prefs=rememberFlosiPreferences()
     val state by prefs.state.collectAsState(initial=FlosiPreferencesState())
     val scope=rememberCoroutineScope()
-    val lang=LocalFlosiLanguage.current
     val currencies=listOf("IQD","USD","EUR","GBP","SAR","AED","KWD","QAR","JOD","EGP","TRY","INR","CNY","JPY","KRW","CAD","AUD","CHF","SEK","RUB")
     var rateCurrency by remember(state.currency){mutableStateOf(currencies.firstOrNull{it!=state.currency}?:"USD")}
     var rateText by remember{mutableStateOf("")}
     var message by remember{mutableStateOf("")}
     var messageError by remember{mutableStateOf(false)}
-    var languageMenu by remember{mutableStateOf(false)}
     var currencyMenu by remember{mutableStateOf(false)}
     var rateCurrencyMenu by remember{mutableStateOf(false)}
-    val selectedLocale=FlosiLocales.get(state.language)
-    fun s(ar:String,en:String)=if(lang=="ar")ar else en
 
-    FlosiPage(flosiText("language_currency"),flosiText("all_languages_ready"),onBack){
+    LaunchedEffect(Unit){
+        if(state.language!="ar") prefs.setLanguage("ar")
+    }
+
+    FlosiPage("اللغة والعملة","العربية هي لغة الواجهة الحالية. نضيف الترجمات لاحقاً بعد اعتمادها كاملة.",onBack){
         CardBox{
-            Text(flosiText("choose_language"))
-            Box(Modifier.fillMaxWidth()){
-                OutlinedButton(onClick={languageMenu=true},modifier=Modifier.fillMaxWidth()){
-                    Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){Text(selectedLocale.label)}
-                }
-                DropdownMenu(expanded=languageMenu,onDismissRequest={languageMenu=false}){
-                    FlosiLocales.all.forEach{locale->
-                        DropdownMenuItem(
-                            text={Text(locale.label)},
-                            onClick={languageMenu=false;scope.launch{prefs.setLanguage(locale.code)}},
-                            trailingIcon={if(state.language==locale.code){Text("✓",color=FlosiPurple)}}
-                        )
-                    }
-                }
+            Text("لغة التطبيق")
+            OutlinedButton(onClick={},enabled=false,modifier=Modifier.fillMaxWidth()){
+                Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){Text("العربية")}
             }
-            Text(s("${FlosiLocales.all.size} لغة متاحة","${FlosiLocales.all.size} languages available"),color=FlosiMuted)
+            Text("تم تثبيت العربية مؤقتاً لمنع تداخل الترجمات.",color=FlosiMuted)
         }
 
         CardBox{
             Text(flosiText("base_currency"))
-            Text(s("هذه العملة تستخدم للتقارير والإجماليات فقط؛ كل حساب يحتفظ بعملته الأصلية.","This currency is used for reports and totals only; each account keeps its own currency."),color=FlosiMuted)
+            Text("هذه العملة تستخدم للتقارير والإجماليات فقط؛ كل حساب يحتفظ بعملته الأصلية.",color=FlosiMuted)
             Box(Modifier.fillMaxWidth()){
                 OutlinedButton(onClick={currencyMenu=true},modifier=Modifier.fillMaxWidth()){
                     Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){Text(state.currency)}
@@ -73,7 +60,7 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
 
         CardBox{
             Text(flosiText("exchange_rates"))
-            Text(s("أدخل سعر 1 وحدة من العملة المختارة مقابل ${state.currency}.","Enter the value of 1 unit of the selected currency in ${state.currency}."),color=FlosiMuted)
+            Text("أدخل سعر 1 وحدة من العملة المختارة مقابل ${state.currency}.",color=FlosiMuted)
             Box(Modifier.fillMaxWidth()){
                 OutlinedButton(onClick={rateCurrencyMenu=true},modifier=Modifier.fillMaxWidth()){
                     Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){Text(rateCurrency)}
@@ -104,7 +91,7 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
                 onClick={scope.launch{
                     val ok=prefs.setExchangeRate(rateCurrency,state.currency,rateText)
                     messageError=!ok
-                    message=if(ok)s("تم حفظ سعر التحويل","Exchange rate saved") else s("سعر التحويل غير صالح","Invalid exchange rate")
+                    message=if(ok)"تم حفظ سعر التحويل" else "سعر التحويل غير صالح"
                     if(ok)rateText=""
                 }},
                 enabled=rateText.toBigDecimalOrNull()?.let{it.signum()>0}==true,
@@ -120,9 +107,9 @@ fun LocaleCurrencyScreen(onBack:()->Unit){
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                     Column(Modifier.weight(1f)){
                         Text("1 ${r.from} = ${r.value.stripTrailingZeros().toPlainString()} ${r.to}",color=FlosiText)
-                        Text(s("يُستخدم مباشرة أو بالعكس تلقائياً","Used directly or reciprocally when needed"),color=FlosiMuted)
+                        Text("يُستخدم مباشرة أو بالعكس تلقائياً",color=FlosiMuted)
                     }
-                    TextButton(onClick={scope.launch{prefs.removeExchangeRate(r.from,r.to);messageError=false;message=s("تم حذف السعر","Rate removed")}}){Text(flosiText("delete"),color=FlosiRed)}
+                    TextButton(onClick={scope.launch{prefs.removeExchangeRate(r.from,r.to);messageError=false;message="تم حذف السعر"}}){Text(flosiText("delete"),color=FlosiRed)}
                 }
             }
         }
