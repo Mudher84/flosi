@@ -1,4 +1,4 @@
-name: Android Signed Build
+name: Android Release Gate
 on:
   workflow_dispatch:
   push:
@@ -19,6 +19,21 @@ jobs:
         with:
           gradle-version: '8.13'
 
+      - name: Unit tests
+        run: gradle --no-daemon testDebugUnitTest --stacktrace
+
+      - name: Compile debug APK
+        run: gradle --no-daemon assembleDebug --stacktrace
+
+      - name: Verify debug APK exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk/debug -name '*.apk' -type f | head -n 1)"
+          test -n "$APK"
+          test -s "$APK"
+          echo "Debug APK compiled: $APK"
+
       - name: Restore Flosi signing keystore
         shell: bash
         env:
@@ -30,9 +45,6 @@ jobs:
           test -n "$CLEANED"
           printf '%s' "$CLEANED" | base64 --decode > "$RUNNER_TEMP/flosi-release.keystore"
           test -s "$RUNNER_TEMP/flosi-release.keystore"
-
-      - name: Unit tests
-        run: gradle --no-daemon testDebugUnitTest --stacktrace
 
       - name: Build signed release APK
         env:
@@ -48,6 +60,7 @@ jobs:
           set -euo pipefail
           APK="$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
           test -n "$APK"
+          test -s "$APK"
           APKSIGNER="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)/apksigner"
           CERTS="$($APKSIGNER verify --verbose --print-certs "$APK")"
           printf '%s\n' "$CERTS"
@@ -55,9 +68,10 @@ jobs:
           SHA256="$(printf '%s\n' "$CERTS" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
           test "$SHA1" = "52b03c94d73bfbb7509c8401054683ded72908ad"
           test "$SHA256" = "138b997ec6ab9906a4702c642bdf5893e585206a07bd04f717160cc3984443dc"
-          echo "Firebase signing fingerprints verified."
+          echo "Release APK signature and Firebase fingerprints verified."
 
       - uses: actions/upload-artifact@v4
         with:
           name: flosi-signed-release-apk
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
