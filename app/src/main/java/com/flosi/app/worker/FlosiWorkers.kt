@@ -15,7 +15,6 @@ import androidx.work.ListenableWorker.Result
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.flosi.app.i18n.FlosiI18n
 import com.flosi.app.settings.FlosiPreferences
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
