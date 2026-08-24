@@ -3,6 +3,7 @@ package com.flosi.app.export
 import android.content.Context
 import android.net.Uri
 import com.flosi.app.data.local.dao.TransactionWithNames
+import com.flosi.app.finance.CurrencyConverter
 import java.util.Locale
 import java.util.TimeZone
 import java.util.zip.ZipEntry
@@ -15,6 +16,11 @@ object XlsxExporter {
         val styleAttr=style?.let{" s=\"$it\""}.orEmpty()
         val numeric=when(value){is Float,is Double->String.format(Locale.US,"%.10f",value.toDouble()).trimEnd('0').trimEnd('.');else->value.toLong().toString()}
         return "<c r=\"$ref\"$styleAttr><v>$numeric</v></c>"
+    }
+
+    private fun currencyCode(raw:String):String {
+        val code=CurrencyConverter.normalizeCode(raw)
+        return if(CurrencyConverter.validCode(code)) code else ""
     }
 
     internal fun excelSerial(epochMillis:Long,timeZone:TimeZone=TimeZone.getDefault()):Double {
@@ -40,7 +46,7 @@ object XlsxExporter {
                     val headers=listOf("ID","Date","Kind","Title","Amount","Currency","Account","Person","Category","Note")
                     append("<row r=\"1\">");headers.forEachIndexed{i,h->append(textCell("${('A'.code+i).toChar()}1",h))};append("</row>")
                     items.forEachIndexed{index,t->
-                        val r=index+2;append("<row r=\"$r\">");append(numberCell("A$r",t.id));append(numberCell("B$r",excelSerial(t.occurredAt),1));append(textCell("C$r",t.kind));append(textCell("D$r",t.title));append(numberCell("E$r",t.amount));append(textCell("F$r",t.accountCurrency.trim().uppercase().ifBlank{"IQD"}));append(textCell("G$r",t.accountName));append(textCell("H$r",t.personName.orEmpty()));append(textCell("I$r",t.categoryName.orEmpty()));append(textCell("J$r",t.note));append("</row>")
+                        val r=index+2;append("<row r=\"$r\">");append(numberCell("A$r",t.id));append(numberCell("B$r",excelSerial(t.occurredAt),1));append(textCell("C$r",t.kind));append(textCell("D$r",t.title));append(numberCell("E$r",t.amount));append(textCell("F$r",currencyCode(t.accountCurrency)));append(textCell("G$r",t.accountName));append(textCell("H$r",t.personName.orEmpty()));append(textCell("I$r",t.categoryName.orEmpty()));append(textCell("J$r",t.note));append("</row>")
                     }
                 }
                 entry("xl/worksheets/sheet1.xml", """<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="10" customWidth="1"/><col min="2" max="2" width="20" customWidth="1"/><col min="3" max="10" width="18" customWidth="1"/></cols><sheetData>$rows</sheetData></worksheet>""")
