@@ -11,14 +11,19 @@ import com.flosi.app.ui.viewmodel.rememberFlosiPreferences
 @Composable
 fun MeSettingsScreen(
  onAccounts:()->Unit,onBudgets:()->Unit,onGoals:()->Unit,onCommitments:()->Unit,onAnalytics:()->Unit,
- onInvoices:()->Unit,onSecurity:()->Unit,onLocale:()->Unit,onData:()->Unit,onConnections:()->Unit
+ onInvoices:()->Unit,onSecurity:()->Unit,onLocale:()->Unit,onData:()->Unit
 ){
+ var connectionsOpen by remember{mutableStateOf(false)}
+ if(connectionsOpen){
+  BankConnectionsScreen{connectionsOpen=false}
+  return
+ }
  val prefs=rememberFlosiPreferences();val state by prefs.state.collectAsState(initial=FlosiPreferencesState())
  FlosiPage(flosiText("me"),localizedLegacyText("إعداداتك ومساحتك")){
   CardBox{Metric(localizedLegacyText("فلوسي الشخصي"),state.currency,FlosiPurple);Text("العربية")}
   CardBox{
    ActionRow(flosiText("accounts"),localizedLegacyText("أموالك"),onClick=onAccounts)
-   ActionRow("ربط البنوك والمحافظ","ZainCash • Open Banking",onClick=onConnections)
+   ActionRow("ربط البنوك والمحافظ","ZainCash • Open Banking",onClick={connectionsOpen=true})
    ActionRow(flosiText("budgets"),localizedLegacyText("خطط الصرف"),onClick=onBudgets)
    ActionRow(flosiText("goals"),flosiText("savings"),onClick=onGoals)
    ActionRow(flosiText("commitments"),localizedLegacyText("القادم عليك"),onClick=onCommitments)
