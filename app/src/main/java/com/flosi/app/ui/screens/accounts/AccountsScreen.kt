@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
 import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.i18n.flosiText
@@ -72,7 +73,7 @@ fun AccountsScreen(onBack:()->Unit,onOpen:(Long)->Unit,onAdd:()->Unit){
   AlertDialog(
    onDismissRequest={showBankConnect=false},
    title={Text(if(lang=="ar")"ربط المصرف" else "Connect bank")},
-   text={Column(verticalArrangement=Arrangement.spacedBy(androidx.compose.ui.unit.dp(8))){
+   text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
     Text(if(lang=="ar")"الربط الحي يتم فقط عبر API / OAuth رسمي من المصرف أو مزود Open Banking معتمد. Flosi لا يطلب ولا يخزن كلمة مرور حسابك المصرفي." else "Live connection is available only through an official bank API/OAuth or an approved Open Banking provider. Flosi never asks for or stores your bank password.")
     Text(if(lang=="ar")"مصارف مقترحة: الرافدين، الرشيد، TBI، أو مصرف آخر." else "Suggested banks: Rafidain, Rasheed, TBI, or another bank.",color=FlosiMuted)
     Text(if(lang=="ar")"بعد تفعيل قناة رسمية، سيقرأ Flosi الحركات الجديدة فقط، يمنع التكرار، ويستطيع إضافة الراتب تلقائياً حسب اختيارك." else "Once an official connection is configured, Flosi imports only new transactions, prevents duplicates, and can add salary automatically if you enable it.",color=FlosiPurple)
