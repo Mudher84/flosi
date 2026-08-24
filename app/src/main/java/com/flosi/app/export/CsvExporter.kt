@@ -3,6 +3,7 @@ package com.flosi.app.export
 import android.content.Context
 import android.net.Uri
 import com.flosi.app.data.local.dao.TransactionWithNames
+import com.flosi.app.finance.CurrencyConverter
 import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -18,6 +19,11 @@ object CsvExporter {
 
     private fun csv(value:Any?):String =
         "\"${safeSpreadsheetText(value).replace("\"","\"\"")}\""
+
+    private fun currencyCode(raw:String):String {
+        val code=CurrencyConverter.normalizeCode(raw)
+        return if(CurrencyConverter.validCode(code)) code else ""
+    }
 
     fun exportTransactions(context:Context,uri:Uri,items:List<TransactionWithNames>){
         val iso=SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
@@ -35,7 +41,7 @@ object CsvExporter {
                             csv(t.kind),
                             csv(t.title),
                             t.amount.toString(),
-                            csv(t.accountCurrency.trim().uppercase().ifBlank{"IQD"}),
+                            csv(currencyCode(t.accountCurrency)),
                             csv(t.accountName),
                             csv(t.personName.orEmpty()),
                             csv(t.categoryName.orEmpty()),
