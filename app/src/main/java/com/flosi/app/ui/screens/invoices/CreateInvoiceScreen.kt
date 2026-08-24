@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.flosi.app.data.local.entity.InvoiceEntity
 import com.flosi.app.data.local.entity.InvoiceItemEntity
+import com.flosi.app.finance.CurrencyConverter
 import com.flosi.app.finance.InvoiceMath
 import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.i18n.flosiText
@@ -22,11 +23,14 @@ private fun decimalInput(raw:String):String{val out=StringBuilder();var separato
 @Composable
 fun CreateInvoiceScreen(onBack:()->Unit){
     val vm:InvoicesViewModel=flosiViewModel();val accounts by vm.accounts.collectAsState();val preferences=rememberFlosiPreferences();val prefs by preferences.state.collectAsState(initial=FlosiPreferencesState());val lang=LocalFlosiLanguage.current
-    val currency=prefs.currency.trim().uppercase().ifBlank{"IQD"};val lines=remember{mutableStateListOf<DraftInvoiceLine>()}
+    val currency=CurrencyConverter.normalizeCode(prefs.currency.ifBlank{"USD"});val lines=remember{mutableStateListOf<DraftInvoiceLine>()}
     var invoiceType by remember{mutableStateOf("sale")}
     var title by remember{mutableStateOf("")};var qty by remember{mutableStateOf("1")};var price by remember{mutableStateOf("")};var discount by remember{mutableStateOf("0")};var taxPercent by remember{mutableStateOf("0")};var paid by remember{mutableStateOf("0")};var paymentAccountId by remember{mutableStateOf<Long?>(null)};var accountMenu by remember{mutableStateOf(false)};var saving by remember{mutableStateOf(false)};var error by remember{mutableStateOf<String?>(null)}
     val quantity=decimalValue(qty);val unitPrice=price.toLongOrNull();val currentLineTotal=if(quantity!=null&&unitPrice!=null)runCatching{InvoiceMath.lineTotal(quantity,unitPrice)}.getOrNull()else null
-    val totals=runCatching{InvoiceMath.totals(lines.map{it.lineTotal},discount.toLongOrNull()?:0L,decimalValue(taxPercent)?:0.0,paid.toLongOrNull()?:0L)}.getOrNull();val needsPaymentAccount=(totals?.paid?:0L)>0L;val selectedAccount=accounts.firstOrNull{it.id==paymentAccountId}
+    val totals=runCatching{InvoiceMath.totals(lines.map{it.lineTotal},discount.toLongOrNull()?:0L,decimalValue(taxPercent)?:0.0,paid.toLongOrNull()?:0L)}.getOrNull();val needsPaymentAccount=(totals?.paid?:0L)>0L
+    val eligiblePaymentAccounts=accounts.filter{CurrencyConverter.normalizeCode(it.currency)==currency}
+    val selectedAccount=eligiblePaymentAccounts.firstOrNull{it.id==paymentAccountId}
+    LaunchedEffect(currency,accounts){if(paymentAccountId!=null&&eligiblePaymentAccounts.none{it.id==paymentAccountId})paymentAccountId=null}
     fun s(ar:String,en:String)=if(lang=="ar")ar else en
 
     FlosiPage(s("إنشاء فاتورة","Create invoice"),s("بيع أو شراء ببنود وحسابات دقيقة","Sale or purchase with precise item totals"),onBack){
@@ -57,18 +61,19 @@ fun CreateInvoiceScreen(onBack:()->Unit){
         }
         if(needsPaymentAccount)CardBox{
             Text(if(invoiceType=="sale")s("حساب استلام الدفعة","Receiving account") else s("حساب دفع الفاتورة","Payment account"),color=FlosiText)
-            Text(if(invoiceType=="sale")s("المقبوض الآن سيُسجّل كدخل فعلي ويزيد رصيد هذا الحساب.","The received amount will be recorded as real income and increase this account balance.") else s("المدفوع الآن سيُسجّل كمصروف فعلي ويُنقص رصيد هذا الحساب.","The paid amount will be recorded as a real expense and reduce this account balance."),color=FlosiMuted)
-            Box{OutlinedButton(onClick={accountMenu=true},modifier=Modifier.fillMaxWidth()){Text(selectedAccount?.let{"${it.name} • ${it.currency}"}?:s("اختر الحساب","Choose account"))};DropdownMenu(accountMenu,{accountMenu=false}){accounts.forEach{account->DropdownMenuItem(text={Text("${account.name} • ${account.currency}")},onClick={paymentAccountId=account.id;accountMenu=false;error=null})}}}
+            Text(if(invoiceType=="sale")s("المقبوض الآن سيُسجّل كدخل فعلي ويزيد رصيد حساب بنفس عملة الفاتورة.","The received amount is recorded as real income in an account with the same invoice currency.") else s("المدفوع الآن سيُسجّل كمصروف فعلي من حساب بنفس عملة الفاتورة.","The paid amount is recorded as a real expense from an account with the same invoice currency."),color=FlosiMuted)
+            if(eligiblePaymentAccounts.isEmpty()) Text(s("لا يوجد حساب بعملة $currency. أضف حساباً بهذه العملة أو اجعل المدفوع الآن صفراً.","No $currency account exists. Add one or set the immediate payment to zero."),color=FlosiRed)
+            else Box{OutlinedButton(onClick={accountMenu=true},modifier=Modifier.fillMaxWidth()){Text(selectedAccount?.let{"${it.name} • ${it.currency}"}?:s("اختر الحساب","Choose account"))};DropdownMenu(accountMenu,{accountMenu=false}){eligiblePaymentAccounts.forEach{account->DropdownMenuItem(text={Text("${account.name} • ${account.currency}")},onClick={paymentAccountId=account.id;accountMenu=false;error=null})}}}
         }
         error?.let{Text(it,color=FlosiRed)}
         Button(onClick={
             val calculated=totals?:return@Button
-            if(calculated.paid>0L&&paymentAccountId==null){error=if(invoiceType=="sale")s("اختر حساب استلام الدفعة","Choose the receiving account") else s("اختر حساب دفع الفاتورة","Choose the payment account");return@Button}
+            if(calculated.paid>0L&&selectedAccount==null){error=if(eligiblePaymentAccounts.isEmpty())s("أنشئ حساباً بعملة $currency أولاً","Create a $currency account first") else if(invoiceType=="sale")s("اختر حساب استلام الدفعة","Choose the receiving account") else s("اختر حساب دفع الفاتورة","Choose the payment account");return@Button}
             val number="${if(invoiceType=="sale")"S" else "P"}-${System.currentTimeMillis()}"
             val invoice=InvoiceEntity(number=number,type=invoiceType,currency=currency,subtotal=calculated.subtotal,discount=calculated.discount,taxPercent=decimalValue(taxPercent)?:0.0,taxAmount=calculated.taxAmount,total=calculated.total,paidAmount=calculated.paid,status=calculated.status)
             val items=lines.map{line->InvoiceItemEntity(invoiceId=0,title=line.title,quantity=line.quantity,unitPrice=line.unitPrice,lineTotal=line.lineTotal)}
             saving=true;error=null
-            vm.create(invoice,items,paymentAccountId){id,message->saving=false;if(id!=null)onBack()else error=message?:s("تعذر حفظ الفاتورة","Could not save invoice")}
-        },enabled=!saving&&lines.isNotEmpty()&&totals!=null&&(!needsPaymentAccount||paymentAccountId!=null),modifier=Modifier.fillMaxWidth()){if(saving)CircularProgressIndicator(strokeWidth=2.dp)else Text(flosiText("save"))}
+            vm.create(invoice,items,selectedAccount?.id){id,message->saving=false;if(id!=null)onBack()else error=message?:s("تعذر حفظ الفاتورة","Could not save invoice")}
+        },enabled=!saving&&lines.isNotEmpty()&&totals!=null&&(!needsPaymentAccount||selectedAccount!=null),modifier=Modifier.fillMaxWidth()){if(saving)CircularProgressIndicator(strokeWidth=2.dp)else Text(flosiText("save"))}
     }
 }
