@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.fragment.app.FragmentActivity
 import com.flosi.app.auth.FlosiAuthGate
 import com.flosi.app.i18n.LocalFlosiLanguage
+import com.flosi.app.subscription.FlosiSubscriptionGate
 import com.flosi.app.ui.navigation.FlosiApp
 import com.flosi.app.ui.theme.FlosiTheme
 
@@ -23,7 +24,9 @@ class MainActivity : FragmentActivity() {
             ) {
                 FlosiTheme {
                     FlosiAuthGate {
-                        FlosiApp()
+                        FlosiSubscriptionGate {
+                            FlosiApp()
+                        }
                     }
                 }
             }
