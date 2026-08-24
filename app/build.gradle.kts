@@ -19,6 +19,9 @@ val flosiFirebaseProjectId = providers.gradleProperty("FLOSI_FIREBASE_PROJECT_ID
 val flosiGoogleWebClientId = providers.gradleProperty("FLOSI_GOOGLE_WEB_CLIENT_ID")
     .orElse("897529405735-h0ijqqgoemls5hje4ucrfckcoq49fo27.apps.googleusercontent.com")
     .get()
+val flosiSubscriptionProductId = providers.gradleProperty("FLOSI_SUBSCRIPTION_PRODUCT_ID")
+    .orElse("flosi_monthly")
+    .get()
 
 val flosiStoreFile = System.getenv("FLOSI_STORE_FILE")
 val flosiStorePassword = System.getenv("FLOSI_KEYSTORE_PASSWORD")
@@ -48,6 +51,7 @@ android {
         buildConfigField("String", "FLOSI_FIREBASE_APP_ID", flosiFirebaseAppId.asBuildConfigString())
         buildConfigField("String", "FLOSI_FIREBASE_PROJECT_ID", flosiFirebaseProjectId.asBuildConfigString())
         buildConfigField("String", "FLOSI_GOOGLE_WEB_CLIENT_ID", flosiGoogleWebClientId.asBuildConfigString())
+        buildConfigField("String", "FLOSI_SUBSCRIPTION_PRODUCT_ID", flosiSubscriptionProductId.asBuildConfigString())
     }
 
     signingConfigs {
@@ -123,6 +127,7 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test:core:1.6.1")
