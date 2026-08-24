@@ -7,6 +7,7 @@ import android.net.Uri
 import com.flosi.app.data.local.dao.TransactionWithNames
 import com.flosi.app.data.local.entity.InvoiceEntity
 import com.flosi.app.data.local.entity.InvoiceItemEntity
+import com.flosi.app.finance.CurrencyConverter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -16,8 +17,15 @@ object PdfExporter {
     private const val PAGE_W = 595
     private const val PAGE_H = 842
 
-    private fun money(value:Long,currency:String):String =
-        "%,d %s".format(Locale.US,abs(value),currency.trim().uppercase().ifBlank{"IQD"})
+    private fun currencyCode(raw:String):String {
+        val code=CurrencyConverter.normalizeCode(raw)
+        return if(CurrencyConverter.validCode(code)) code else ""
+    }
+
+    private fun money(value:Long,currency:String):String {
+        val code=currencyCode(currency)
+        return if(code.isBlank()) "%,d".format(Locale.US,abs(value)) else "%,d %s".format(Locale.US,abs(value),code)
+    }
 
     private fun quantity(value:Double):String =
         if(value%1.0==0.0) String.format(Locale.US,"%.0f",value)
@@ -57,7 +65,7 @@ object PdfExporter {
         paint.textSize=9f
         items.forEach { t ->
             if(y>780f) newPage()
-            val currency=t.accountCurrency.trim().uppercase().ifBlank{"IQD"}
+            val currency=currencyCode(t.accountCurrency)
             val sign=when(t.kind){
                 "income","invoice_payment","debt_received"->"+"
                 "expense","debt_given"->"-"
@@ -86,7 +94,7 @@ object PdfExporter {
     ) {
         val doc=PdfDocument()
         val p=Paint(Paint.ANTI_ALIAS_FLAG)
-        val currency=invoice.currency.trim().uppercase().ifBlank{"IQD"}
+        val currency=currencyCode(invoice.currency)
         var pageNo=1
         var page=doc.startPage(PdfDocument.PageInfo.Builder(PAGE_W,PAGE_H,pageNo).create())
         var c=page.canvas
@@ -96,7 +104,7 @@ object PdfExporter {
             p.textSize=24f;p.isFakeBoldText=true;c.drawText("FLOSI",40f,y,p);y+=35f
             p.textSize=18f;c.drawText("Invoice #${invoice.number}",40f,y,p);y+=26f
             p.textSize=10f;p.isFakeBoldText=false
-            c.drawText("Currency: $currency   Status: ${invoice.status}",40f,y,p);y+=24f
+            c.drawText("Currency: ${currency.ifBlank{"—"}}   Status: ${invoice.status}",40f,y,p);y+=24f
         }
         fun newPage(){
             doc.finishPage(page)
