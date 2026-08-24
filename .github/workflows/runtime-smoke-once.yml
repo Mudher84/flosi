@@ -30,7 +30,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             APK=$(find app/build/outputs/apk/debug -name '*.apk' | head -n1)
             test -n "$APK"
             adb install -r "$APK"
