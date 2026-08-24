@@ -121,7 +121,7 @@ fun FlosiApp() {
             composable(R.ACCOUNTS) { AccountsScreen({ nav.popBackStack() }, { id -> nav.navigate("${R.ACCOUNT}/$id") }, { nav.navigate(R.ACCOUNT_EDIT) }) }
             composable("${R.ACCOUNT}/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry -> AccountDetailScreen(entry.arguments?.getLong("id") ?: 0L, { nav.popBackStack() }, { nav.navigate(R.TRANSFER) }) }
             composable(R.ACCOUNT_EDIT) { AccountEditScreen { nav.popBackStack() } }
-            composable(R.TRANSFER) { TransferScreen { nav.popBackStack() } }
+            composable(R.TRANSFER) { TransferScreen(onBack = { nav.popBackStack() }) }
             composable(R.COMMITMENTS) { CommitmentsScreen({ nav.popBackStack() }, { nav.navigate(R.COMMITMENT_EDIT) }) }
             composable(R.COMMITMENT_EDIT) { CommitmentEditScreen { nav.popBackStack() } }
             composable(R.BUDGETS) { BudgetsScreen({ nav.popBackStack() }, { nav.navigate(R.BUDGET_DETAIL) }) }
