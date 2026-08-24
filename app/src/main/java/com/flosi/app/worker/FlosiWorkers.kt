@@ -15,6 +15,9 @@ import androidx.work.ListenableWorker.Result
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.flosi.app.i18n.FlosiI18n
+import com.flosi.app.settings.FlosiPreferences
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
 class DailyFinanceWorker(
@@ -23,11 +26,12 @@ class DailyFinanceWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        if (!FlosiWorkScheduler.isDailySummaryEnabled(applicationContext)) {
-            return Result.success()
-        }
+        if (!FlosiWorkScheduler.isDailySummaryEnabled(applicationContext)) return Result.success()
 
         ensureChannel(applicationContext)
+        val prefs=runCatching{FlosiPreferences(applicationContext).state.first()}.getOrNull()
+        val language=prefs?.language ?: "ar"
+        val arabic=language=="ar"
 
         val notificationManager = NotificationManagerCompat.from(applicationContext)
         val notificationAllowed =
@@ -39,13 +43,10 @@ class DailyFinanceWorker(
                     ) == PackageManager.PERMISSION_GRANTED)
 
         if (notificationAllowed) {
-            val notification = NotificationCompat.Builder(
-                applicationContext,
-                CHANNEL
-            )
+            val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("ملخص فلوسي")
-                .setContentText("راجع مصروفات اليوم والالتزامات القادمة.")
+                .setContentTitle(if(arabic)"ملخص Flosi" else "Flosi daily summary")
+                .setContentText(if(arabic)"راجع مصروفات اليوم والالتزامات القادمة." else "Review today's spending and upcoming commitments.")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
                 .build()
@@ -66,7 +67,7 @@ class DailyFinanceWorker(
                 manager.createNotificationChannel(
                     NotificationChannel(
                         CHANNEL,
-                        "فلوسي",
+                        "Flosi",
                         NotificationManager.IMPORTANCE_DEFAULT
                     )
                 )
@@ -111,20 +112,14 @@ object FlosiWorkScheduler {
             .setRequiresBatteryNotLow(true)
             .build()
 
-        val daily =
-            PeriodicWorkRequestBuilder<DailyFinanceWorker>(
-                24,
-                TimeUnit.HOURS
-            )
-                .setConstraints(constraints)
-                .build()
+        val daily = PeriodicWorkRequestBuilder<DailyFinanceWorker>(24, TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .build()
 
-        WorkManager
-            .getInstance(app)
-            .enqueueUniquePeriodicWork(
-                WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                daily
-            )
+        WorkManager.getInstance(app).enqueueUniquePeriodicWork(
+            WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            daily
+        )
     }
 }
