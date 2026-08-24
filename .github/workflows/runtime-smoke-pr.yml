@@ -31,7 +31,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             APK=$(find app/build/outputs/apk/debug -name '*.apk' -type f | head -n1)
             test -n "$APK"
             test -s "$APK"
