@@ -102,8 +102,14 @@ fun FlosiApp() {
                 AddTransactionScreen(
                     onBack={nav.popBackStack()},
                     onPickAccount={nav.navigate(R.ACCOUNT_PICKER)},
-                    onPickPerson={nav.navigate(R.PERSON_PICKER)},
-                    onPickCategory={nav.navigate(R.CATEGORY_PICKER)},
+                    onPickPerson={currency->
+                        entry.savedStateHandle["pickerPersonCurrency"]=currency
+                        nav.navigate(R.PERSON_PICKER)
+                    },
+                    onPickCategory={kind->
+                        entry.savedStateHandle["pickerCategoryKind"]=kind
+                        nav.navigate(R.CATEGORY_PICKER)
+                    },
                     pickedAccountId=pickedAccount,
                     pickedPersonId=pickedPerson,
                     pickedCategoryId=pickedCategory
