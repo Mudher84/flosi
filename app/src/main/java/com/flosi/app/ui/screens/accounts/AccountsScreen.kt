@@ -34,7 +34,15 @@ fun AccountsScreen(onBack:()->Unit,onOpen:(Long)->Unit,onAdd:()->Unit){
    if(missing.isNotEmpty())Text(if(lang=="ar")"غير محتسب: ${missing.joinToString()}" else "Excluded: ${missing.joinToString()}",color=Color(0xFFFFC57A),fontSize=10.sp)
   }
   SectionTitle(flosiText("accounts"),flosiText("add_account"),onAdd)
-  if(accounts.isEmpty())CardBox{Text(flosiText("no_data"),color=MaterialTheme.colorScheme.onSurfaceVariant)} else accounts.forEachIndexed{index,a->
+  if(accounts.isEmpty()){
+   EmptyState(
+    title=if(lang=="ar")"بعد ما عندك حسابات" else "No accounts yet",
+    subtitle=if(lang=="ar")"أضف أول حساب حتى يبدأ Flosi يحسب رصيدك وصرفك بصورة صحيحة." else "Add your first account so Flosi can track balances and spending correctly.",
+    action=if(lang=="ar")"إضافة أول حساب" else "Add first account",
+    onAction=onAdd,
+    symbol="◈"
+   )
+  } else accounts.forEachIndexed{index,a->
    val accent=listOf(FlosiPurple,FlosiBlue,FlosiGreen,FlosiOrange)[index%4]
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),shape=RoundedCornerShape(26.dp),elevation=CardDefaults.cardElevation(defaultElevation=2.dp),onClick={onOpen(a.id)}){
     Row(Modifier.fillMaxWidth().padding(17.dp),verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(48.dp).background(accent.copy(alpha=.11f),RoundedCornerShape(16.dp)),contentAlignment=Alignment.Center){Text(a.name.take(1).uppercase(),color=accent,fontWeight=FontWeight.Black,fontSize=18.sp)};Spacer(Modifier.width(13.dp));Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text(a.name,color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.ExtraBold,fontSize=15.sp);Text("${a.type} • ${a.currency}",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=10.sp)};Text(moneyText(a.currentBalance,a.currency),color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.Black,fontSize=14.sp)}
