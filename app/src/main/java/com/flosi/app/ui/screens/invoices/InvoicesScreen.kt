@@ -22,14 +22,23 @@ fun InvoicesScreen(onBack:()->Unit,onCreate:()->Unit,onDetail:(Long)->Unit){
             Metric(s("فواتير شراء تحتاج دفع","Purchase invoices to pay"),payables.toString(),if(payables>0)FlosiRed else FlosiGreen)
         }
         SectionTitle(flosiText("invoices"),s("+ إنشاء","+ Create"),onCreate)
-        CardBox{
-            if(items.isEmpty())Text(s("ماكو فواتير بعد","No invoices yet"),color=FlosiMuted)
-            items.forEach{i->
-                val currency=i.currency.trim().uppercase().ifBlank{"IQD"};val remaining=(i.total-i.paidAmount).coerceAtLeast(0L);val tone=when(i.status){"paid"->FlosiGreen;"partial"->FlosiOrange;else->if(i.type=="purchase")FlosiRed else FlosiPurple}
-                val typeLabel=if(i.type=="purchase")s("شراء","Purchase")else s("بيع","Sale")
-                val status=if(lang=="ar") when(i.status){"paid"->"$typeLabel • مدفوعة بالكامل • $currency";"partial"->"$typeLabel • متبقي ${moneyText(remaining,currency)}";"unpaid"->"$typeLabel • غير مدفوعة • متبقي ${moneyText(remaining,currency)}";"cancelled"->"$typeLabel • ملغاة • $currency";else->"$typeLabel • مسودة • $currency"}
-                else when(i.status){"paid"->"$typeLabel • Paid in full • $currency";"partial"->"$typeLabel • Remaining ${moneyText(remaining,currency)}";"unpaid"->"$typeLabel • Unpaid • remaining ${moneyText(remaining,currency)}";"cancelled"->"$typeLabel • Cancelled • $currency";else->"$typeLabel • Draft • $currency"}
-                ActionRow("#${i.number}",status,moneyText(i.total,currency),tone){onDetail(i.id)}
+        if(items.isEmpty()){
+            EmptyState(
+                title=s("ما عندك فواتير بعد","No invoices yet"),
+                subtitle=s("أنشئ أول فاتورة بيع أو شراء وخلي Flosi يتابع المدفوع والمتبقي وياك.","Create your first sale or purchase invoice and let Flosi track paid and remaining amounts."),
+                action=s("إنشاء أول فاتورة","Create first invoice"),
+                onAction=onCreate,
+                symbol="▤"
+            )
+        } else {
+            CardBox{
+                items.forEach{i->
+                    val currency=i.currency.trim().uppercase().ifBlank{"IQD"};val remaining=(i.total-i.paidAmount).coerceAtLeast(0L);val tone=when(i.status){"paid"->FlosiGreen;"partial"->FlosiOrange;else->if(i.type=="purchase")FlosiRed else FlosiPurple}
+                    val typeLabel=if(i.type=="purchase")s("شراء","Purchase")else s("بيع","Sale")
+                    val status=if(lang=="ar") when(i.status){"paid"->"$typeLabel • مدفوعة بالكامل • $currency";"partial"->"$typeLabel • متبقي ${moneyText(remaining,currency)}";"unpaid"->"$typeLabel • غير مدفوعة • متبقي ${moneyText(remaining,currency)}";"cancelled"->"$typeLabel • ملغاة • $currency";else->"$typeLabel • مسودة • $currency"}
+                    else when(i.status){"paid"->"$typeLabel • Paid in full • $currency";"partial"->"$typeLabel • Remaining ${moneyText(remaining,currency)}";"unpaid"->"$typeLabel • Unpaid • remaining ${moneyText(remaining,currency)}";"cancelled"->"$typeLabel • Cancelled • $currency";else->"$typeLabel • Draft • $currency"}
+                    ActionRow("#${i.number}",status,moneyText(i.total,currency),tone){onDetail(i.id)}
+                }
             }
         }
     }
