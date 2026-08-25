@@ -1,0 +1,28 @@
+name: Flosi Backend Check
+on:
+  push:
+    paths:
+      - 'server/**'
+      - '.github/workflows/server-check.yml'
+  pull_request:
+    paths:
+      - 'server/**'
+      - '.github/workflows/server-check.yml'
+permissions:
+  contents: read
+jobs:
+  backend-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm install --package-lock-only
+      - run: npm ci
+      - run: npm run check
