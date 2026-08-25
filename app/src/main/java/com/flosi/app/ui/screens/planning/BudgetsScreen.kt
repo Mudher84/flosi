@@ -38,7 +38,15 @@ fun BudgetsScreen(onBack:()->Unit,onDetail:()->Unit){
             }
         }
         SectionTitle(flosiText("budgets"),if(lang=="ar")"+ ميزانية" else "+ Budget",onDetail)
-        if(items.isEmpty()) CardBox{Text(if(lang=="ar")"ابدأ بميزانية شهرية حتى Flosi يراقب صرفك وياك." else "Create a monthly budget and Flosi will track your spending with you.",color=MaterialTheme.colorScheme.onSurfaceVariant)}
+        if(items.isEmpty()){
+            EmptyState(
+                title=if(lang=="ar")"ابدأ أول ميزانية" else "Create your first budget",
+                subtitle=if(lang=="ar")"حدد سقف للصرف وFlosi يراقب النسبة ويبهك قبل لا تتجاوز الحد." else "Set a spending limit and Flosi will track progress and warn you before you go over.",
+                action=if(lang=="ar")"إنشاء ميزانية" else "Create budget",
+                onAction=onDetail,
+                symbol="◔"
+            )
+        }
         items.forEach{item->
             val budget=item.budget;val tone=when{item.isOver->FlosiRed;item.warningReached->FlosiOrange;else->FlosiGreen};val category=budget.categoryId?.let(categoryNames::get)?:if(lang=="ar")"كل المصروفات" else "All expenses";val percent=item.usagePercent.coerceAtLeast(0f);val progress by animateFloatAsState((percent/100f).coerceIn(0f,1f),tween(700),label="budgetProgress")
             Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),shape=RoundedCornerShape(28.dp),elevation=CardDefaults.cardElevation(defaultElevation=2.dp)){
