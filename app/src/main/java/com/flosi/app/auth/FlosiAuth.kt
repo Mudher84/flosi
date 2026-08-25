@@ -31,8 +31,10 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 
 private val Purple = Color(0xFF7B44EF)
 private val PurpleSoft = Color(0xFFF5F0FF)
@@ -40,6 +42,7 @@ private val TextMain = Color(0xFF17131F)
 private val Muted = Color(0xFF8F8798)
 private val Green = Color(0xFF18B97D)
 private val Red = Color(0xFFE84C61)
+private const val AUTH_TIMEOUT_MS = 45_000L
 
 private tailrec fun Context.activity(): Activity? = when (this) {
     is Activity -> this
@@ -53,6 +56,12 @@ private object CloudAuth {
             BuildConfig.FLOSI_FIREBASE_APP_ID.isNotBlank() &&
             BuildConfig.FLOSI_FIREBASE_PROJECT_ID.isNotBlank() &&
             BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID.isNotBlank()
+
+    private suspend fun <T> timed(label: String, block: suspend () -> T): T = try {
+        withTimeout(AUTH_TIMEOUT_MS) { block() }
+    } catch (_: TimeoutCancellationException) {
+        error("$label لم يكتمل خلال 45 ثانية. تحقق من الإنترنت وإعداد Firebase/Google ثم حاول مرة أخرى.")
+    }
 
     fun auth(context: Context): FirebaseAuth {
         val app = FirebaseApp.getApps(context).firstOrNull { it.name == "flosi-auth" } ?: run {
@@ -68,7 +77,7 @@ private object CloudAuth {
         return FirebaseAuth.getInstance(app)
     }
 
-    suspend fun google(context: Context): FirebaseUser {
+    suspend fun google(context: Context): FirebaseUser = timed("تسجيل Google") {
         val activity = context.activity() ?: error("تعذر العثور على شاشة Android النشطة لتسجيل Google")
         val option = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
@@ -89,19 +98,23 @@ private object CloudAuth {
         val result = auth(activity)
             .signInWithCredential(GoogleAuthProvider.getCredential(token, null))
             .await()
-        return result.user ?: error("تعذر إنشاء جلسة Flosi")
+        result.user ?: error("تعذر إنشاء جلسة Flosi")
     }
 
-    suspend fun emailLogin(context: Context, email: String, password: String): FirebaseUser =
+    suspend fun emailLogin(context: Context, email: String, password: String): FirebaseUser = timed("تسجيل الدخول") {
         auth(context).signInWithEmailAndPassword(email.trim(), password).await().user
             ?: error("تعذر تسجيل الدخول")
+    }
 
-    suspend fun emailRegister(context: Context, email: String, password: String): FirebaseUser =
+    suspend fun emailRegister(context: Context, email: String, password: String): FirebaseUser = timed("إنشاء الحساب") {
         auth(context).createUserWithEmailAndPassword(email.trim(), password).await().user
             ?: error("تعذر إنشاء الحساب")
+    }
 
     suspend fun reset(context: Context, email: String) {
-        auth(context).sendPasswordResetEmail(email.trim()).await()
+        timed("استعادة كلمة المرور") {
+            auth(context).sendPasswordResetEmail(email.trim()).await()
+        }
     }
 }
 
@@ -269,8 +282,8 @@ private fun EmailLogin(
                     error = null
                     try {
                         onSignedIn(CloudAuth.emailLogin(context, email, password))
-                    } catch (_: Throwable) {
-                        error = "البريد أو كلمة المرور غير صحيحة."
+                    } catch (t: Throwable) {
+                        error = t.message ?: "البريد أو كلمة المرور غير صحيحة."
                     } finally {
                         busy = false
                     }
@@ -380,8 +393,8 @@ private fun ResetPassword(initialEmail: String, onBack: () -> Unit) {
                     try {
                         CloudAuth.reset(context, email)
                         sent = true
-                    } catch (_: Throwable) {
-                        error = "تعذر إرسال رسالة الاستعادة. تحقق من البريد والاتصال."
+                    } catch (t: Throwable) {
+                        error = t.message ?: "تعذر إرسال رسالة الاستعادة. تحقق من البريد والاتصال."
                     } finally {
                         busy = false
                     }
