@@ -12,7 +12,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import com.flosi.app.ui.components.*
-import java.util.Locale
 
 private val lightScheme = lightColorScheme(
     primary = FlosiPurple,
@@ -59,19 +58,13 @@ private val typography = Typography(
     labelLarge = Typography().labelLarge.copy(fontSize = 13.sp),
 )
 
-private fun isRtlLocale(locale: Locale): Boolean {
-    return locale.language.lowercase() in setOf("ar", "fa", "ur", "he")
-}
-
 @Composable
 fun FlosiTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    layoutDirection: LayoutDirection = LayoutDirection.Ltr,
     content: @Composable () -> Unit,
 ) {
-    val locale = Locale.getDefault()
-    val direction = if (isRtlLocale(locale)) LayoutDirection.Rtl else LayoutDirection.Ltr
-
-    CompositionLocalProvider(LocalLayoutDirection provides direction) {
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         MaterialTheme(
             colorScheme = if (darkTheme) darkScheme else lightScheme,
             typography = typography,
