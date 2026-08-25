@@ -24,46 +24,62 @@ import java.text.NumberFormat
 import java.util.Currency
 import java.util.Locale
 
-val FlosiPurple = Color(0xFF8A5CF6)
-val FlosiPurpleDeep = Color(0xFF6E3EE8)
-val FlosiPurpleSoft = Color(0xFFF3EEFF)
-val FlosiLavender = Color(0xFFE9DEFF)
-val FlosiBg = Color(0xFFF7F7FA)
+val FlosiPurple = Color(0xFF7757FF)
+val FlosiPurpleDeep = Color(0xFF5134D8)
+val FlosiPurpleSoft = Color(0xFFF0ECFF)
+val FlosiLavender = Color(0xFFE4DBFF)
+val FlosiBg = Color(0xFFF8F7FC)
 val FlosiSurface = Color(0xFFFFFFFF)
-val FlosiText = Color(0xFF18151F)
-val FlosiMuted = Color(0xFF8B8792)
-val FlosiLine = Color(0xFFF0EDF4)
-val FlosiGreen = Color(0xFF31C68B)
-val FlosiRed = Color(0xFFFF6B72)
-val FlosiOrange = Color(0xFFFF8B4A)
-val FlosiBlue = Color(0xFF3FA7F5)
-val FlosiDark = Color(0xFF17151D)
+val FlosiText = Color(0xFF17141F)
+val FlosiMuted = Color(0xFF8E8999)
+val FlosiLine = Color(0xFFEDE9F3)
+val FlosiGreen = Color(0xFF20B981)
+val FlosiRed = Color(0xFFF45F6B)
+val FlosiOrange = Color(0xFFFF9D4D)
+val FlosiBlue = Color(0xFF4D9BFF)
+val FlosiDark = Color(0xFF15121C)
+val FlosiGold = Color(0xFFE7B65B)
 
-val FlosiHeroBrush = Brush.linearGradient(listOf(Color(0xFFA86BFF),Color(0xFF8C5AF3),Color(0xFF6D3CE4)))
+val FlosiHeroBrush = Brush.linearGradient(
+    listOf(Color(0xFF9A7BFF), Color(0xFF7252F3), Color(0xFF4F34C8))
+)
+
+val FlosiPremiumBrush = Brush.linearGradient(
+    listOf(Color(0xFF17121F), Color(0xFF241A35), Color(0xFF3A285B))
+)
 
 @Composable
 fun FlosiPage(title: String, subtitle: String = "", onBack: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(FlosiBg).statusBarsPadding()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
                 if (subtitle.isNotBlank()) {
-                    Text(text = localizedLegacyText(subtitle), color = FlosiMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(2.dp))
+                    Text(localizedLegacyText(subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(3.dp))
                 }
-                Text(text = localizedLegacyText(title), color = FlosiText, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                Text(localizedLegacyText(title), color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.ExtraBold, fontSize = 25.sp)
             }
             if (onBack != null) {
                 Spacer(Modifier.width(12.dp))
-                Surface(modifier = Modifier.size(42.dp).clickable(onClick = onBack), shape = CircleShape, color = Color.White, shadowElevation = 1.dp) {
+                Surface(
+                    modifier = Modifier.size(44.dp).clickable(onClick = onBack),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 3.dp,
+                    tonalElevation = 1.dp
+                ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = localizedLegacyText("رجوع"), tint = FlosiText)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, localizedLegacyText("رجوع"), tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
         }
         Column(
-            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
             content = content
         )
     }
@@ -71,41 +87,67 @@ fun FlosiPage(title: String, subtitle: String = "", onBack: (() -> Unit)? = null
 
 @Composable
 fun CardBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FlosiSurface), shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(28.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 17.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content
+        )
     }
 }
 
 @Composable
-fun Metric(label: String, value: String, tone: Color = FlosiText) {
+fun PremiumCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Surface(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(30.dp), color = FlosiDark, shadowElevation = 6.dp) {
+        Box(Modifier.background(FlosiPremiumBrush)) {
+            Box(Modifier.size(180.dp).offset(x = (-38).dp, y = (-72).dp).background(Color.White.copy(alpha = .035f), CircleShape))
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+        }
+    }
+}
+
+@Composable
+fun Metric(label: String, value: String, tone: Color = MaterialTheme.colorScheme.onSurface) {
     Column(horizontalAlignment = Alignment.Start) {
-        Text(localizedLegacyText(label), color = FlosiMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(2.dp))
-        Text(value, color = tone, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(localizedLegacyText(label), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(3.dp))
+        Text(value, color = tone, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 
 @Composable
 fun ActionRow(title: String, subtitle: String = "", value: String? = null, accent: Color = FlosiPurple, onClick: (() -> Unit)? = null) {
-    val rowModifier=if(onClick!=null) Modifier.fillMaxWidth().clickable(onClick=onClick).padding(vertical=8.dp) else Modifier.fillMaxWidth().padding(vertical=8.dp)
+    val rowModifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp) else Modifier.fillMaxWidth().padding(vertical = 9.dp)
     Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(38.dp).background(accent.copy(alpha = .11f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(9.dp).background(accent, CircleShape))
+        Box(
+            modifier = Modifier.size(42.dp).background(accent.copy(alpha = .10f), RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(Modifier.size(10.dp).background(accent, CircleShape))
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(13.dp))
         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-            Text(localizedLegacyText(title), fontWeight = FontWeight.SemiBold, color = FlosiText, fontSize = 14.sp)
-            if (subtitle.isNotBlank()) Text(localizedLegacyText(subtitle), color = FlosiMuted, fontSize = 11.sp)
+            Text(localizedLegacyText(title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
+            if (subtitle.isNotBlank()) Text(localizedLegacyText(subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
         }
-        if (value != null) Text(value, fontWeight = FontWeight.Bold, color = accent, fontSize = 13.sp)
+        if (value != null) Text(value, fontWeight = FontWeight.ExtraBold, color = accent, fontSize = 13.sp)
     }
 }
 
 @Composable
 fun SectionTitle(title: String, action: String? = null, onAction: () -> Unit = {}) {
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(localizedLegacyText(title), modifier = Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlosiText)
-        if (action != null) Text(localizedLegacyText(action), color = FlosiPurple, modifier = Modifier.clickable(onClick = onAction), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(localizedLegacyText(title), modifier = Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground)
+        if (action != null) {
+            Surface(shape = RoundedCornerShape(50), color = FlosiPurpleSoft, modifier = Modifier.clickable(onClick = onAction)) {
+                Text(localizedLegacyText(action), color = FlosiPurpleDeep, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
