@@ -89,7 +89,7 @@ private enum class Stage { CHOICE, EMAIL, REGISTER, RESET }
     subtitle?.let{ Text(it,color=Muted) }
 }
 
-@Composable fun FlosiAuthGate(content:@Composable()->Unit){
+@Composable fun FlosiAuthGate(content: @Composable () -> Unit){
     val context=LocalContext.current
     if(!CloudAuth.configured()){ MissingConfig(); return }
     val auth=remember{CloudAuth.auth(context)}; var user by remember{mutableStateOf(auth.currentUser)}; var stage by remember{mutableStateOf(Stage.CHOICE)}
@@ -128,4 +128,4 @@ private enum class Stage { CHOICE, EMAIL, REGISTER, RESET }
     AuthPage{BrandHeader();Text("استعادة كلمة المرور",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text("أدخل البريد المرتبط بحساب Flosi.",color=Muted);OutlinedTextField(email,{email=it},label={Text("البريد الإلكتروني")},singleLine=true,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(16.dp));Button(onClick={scope.launch{busy=true;error=null;try{CloudAuth.reset(context,email);sent=true}catch(t:Throwable){error=t.message?:"تعذر إرسال رسالة الاستعادة."}finally{busy=false}}},enabled=!busy&&email.isNotBlank(),modifier=Modifier.fillMaxWidth().height(52.dp),colors=ButtonDefaults.buttonColors(containerColor=Purple),shape=RoundedCornerShape(16.dp)){if(busy)CircularProgressIndicator(strokeWidth=2.dp,color=Color.White)else Text("إرسال رابط الاستعادة")};if(sent)Text("تم إرسال طلب الاستعادة. افحص بريدك.",color=Green);error?.let{Text(it,color=Red)};TextButton(onClick=onBack,modifier=Modifier.fillMaxWidth()){Text("العودة")} }
 }
 
-@Composable private fun AuthPage(content:@Composable ColumnScope.()->Unit){Surface(Modifier.fillMaxSize(),color=Color(0xFFF7F6FB)){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Card(modifier=Modifier.fillMaxWidth().padding(18.dp),shape=RoundedCornerShape(28.dp),colors=CardDefaults.cardColors(containerColor=Color.White),elevation=CardDefaults.cardElevation(defaultElevation=8.dp)){Column(modifier=Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp),content=content)}}}}
+@Composable private fun AuthPage(content: @Composable ColumnScope.() -> Unit){Surface(Modifier.fillMaxSize(),color=Color(0xFFF7F6FB)){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Card(modifier=Modifier.fillMaxWidth().padding(18.dp),shape=RoundedCornerShape(28.dp),colors=CardDefaults.cardColors(containerColor=Color.White),elevation=CardDefaults.cardElevation(defaultElevation=8.dp)){Column(modifier=Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp),content=content)}}}}
