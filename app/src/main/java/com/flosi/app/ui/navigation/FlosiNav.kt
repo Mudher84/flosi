@@ -67,33 +67,29 @@ fun FlosiApp(){
     if(locked){FlosiLockScreen(onUnlocked={AppSecurity.markUnlocked(context);locked=false;securityEpoch++});return}
 
     val nav=rememberNavController();val current=nav.currentBackStackEntryAsState().value?.destination?.route;val rootRoutes=setOf(R.TODAY,R.ACTIVITY,R.PEOPLE,R.ME)
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar={if(current in rootRoutes)RootBottomBar(current){route->if(route=="add")nav.navigate(R.TX_ADD)else nav.navigate(route){launchSingleTop=true;restoreState=true;popUpTo(R.TODAY){saveState=true}}}}
-    ){padding->
+    fun goRoot(route:String){
+        if(route==R.TODAY){
+            val popped=nav.popBackStack(R.TODAY,false)
+            if(!popped&&nav.currentDestination?.route!=R.TODAY)nav.navigate(R.TODAY){launchSingleTop=true}
+        }else{
+            nav.navigate(route){launchSingleTop=true;restoreState=true;popUpTo(R.TODAY){saveState=true}}
+        }
+    }
+    Scaffold(containerColor=MaterialTheme.colorScheme.background,bottomBar={if(current in rootRoutes)RootBottomBar(current){route->if(route=="add")nav.navigate(R.TX_ADD)else goRoot(route)}}){padding->
         NavHost(navController=nav,startDestination=R.TODAY,modifier=Modifier.padding(padding)){
             composable(R.TODAY){TodayScreen(onActivity={nav.navigate(R.ACTIVITY)},onNotifications={nav.navigate(R.NOTIFICATIONS)},onCommitments={nav.navigate(R.COMMITMENTS)})}
             composable(R.ACTIVITY){ActivityScreen(onOpenDetail={id->nav.navigate("${R.TX_DETAIL}/$id")},onAdd={nav.navigate(R.TX_ADD)})}
             composable("${R.TX_DETAIL}/{id}",arguments=listOf(navArgument("id"){type=NavType.LongType})){entry->TransactionDetailScreen(entry.arguments?.getLong("id")?:0L){nav.popBackStack()}}
-            composable(R.TX_ADD){entry->
-                val pickedAccount by entry.savedStateHandle.getStateFlow<Long?>("pickedAccountId",null).collectAsState();val pickedPerson by entry.savedStateHandle.getStateFlow<Long?>("pickedPersonId",null).collectAsState();val pickedCategory by entry.savedStateHandle.getStateFlow<Long?>("pickedCategoryId",null).collectAsState()
-                AddTransactionScreen(onBack={nav.popBackStack()},onPickAccount={nav.navigate(R.ACCOUNT_PICKER)},onPickPerson={currency->entry.savedStateHandle["pickerPersonCurrency"]=currency;nav.navigate(R.PERSON_PICKER)},onPickCategory={kind->entry.savedStateHandle["pickerCategoryKind"]=kind;nav.navigate(R.CATEGORY_PICKER)},pickedAccountId=pickedAccount,pickedPersonId=pickedPerson,pickedCategoryId=pickedCategory)
-            }
+            composable(R.TX_ADD){entry->val pickedAccount by entry.savedStateHandle.getStateFlow<Long?>("pickedAccountId",null).collectAsState();val pickedPerson by entry.savedStateHandle.getStateFlow<Long?>("pickedPersonId",null).collectAsState();val pickedCategory by entry.savedStateHandle.getStateFlow<Long?>("pickedCategoryId",null).collectAsState();AddTransactionScreen(onBack={nav.popBackStack()},onPickAccount={nav.navigate(R.ACCOUNT_PICKER)},onPickPerson={currency->entry.savedStateHandle["pickerPersonCurrency"]=currency;nav.navigate(R.PERSON_PICKER)},onPickCategory={kind->entry.savedStateHandle["pickerCategoryKind"]=kind;nav.navigate(R.CATEGORY_PICKER)},pickedAccountId=pickedAccount,pickedPersonId=pickedPerson,pickedCategoryId=pickedCategory)}
             composable(R.PEOPLE){PeopleScreen({id->nav.navigate("${R.PERSON}/$id")},{nav.navigate(R.PERSON_EDIT)})}
-            composable("${R.PERSON}/{id}",arguments=listOf(navArgument("id"){type=NavType.LongType})){entry->
-                val id=entry.arguments?.getLong("id")?:0L
-                PersonStatementScreen(id,{nav.popBackStack()},{nav.navigate(R.TX_ADD)}){personId->nav.navigate("${R.COMMITMENT_EDIT}?personId=$personId")}
-            }
+            composable("${R.PERSON}/{id}",arguments=listOf(navArgument("id"){type=NavType.LongType})){entry->val id=entry.arguments?.getLong("id")?:0L;PersonStatementScreen(id,{nav.popBackStack()},{nav.navigate(R.TX_ADD)}){personId->nav.navigate("${R.COMMITMENT_EDIT}?personId=$personId")}}
             composable(R.PERSON_EDIT){PersonEditScreen{nav.popBackStack()}}
             composable(R.ACCOUNTS){AccountsScreen({nav.popBackStack()},{id->nav.navigate("${R.ACCOUNT}/$id")},{nav.navigate(R.ACCOUNT_EDIT)})}
             composable("${R.ACCOUNT}/{id}",arguments=listOf(navArgument("id"){type=NavType.LongType})){entry->AccountDetailScreen(entry.arguments?.getLong("id")?:0L,{nav.popBackStack()},{nav.navigate(R.TRANSFER)})}
             composable(R.ACCOUNT_EDIT){AccountEditScreen{nav.popBackStack()}}
             composable(R.TRANSFER){TransferScreen(onBack={nav.popBackStack()})}
             composable(R.COMMITMENTS){CommitmentsScreen({nav.popBackStack()},{nav.navigate(R.COMMITMENT_EDIT)})}
-            composable("${R.COMMITMENT_EDIT}?personId={personId}",arguments=listOf(navArgument("personId"){type=NavType.LongType;defaultValue=-1L})){entry->
-                val personId=entry.arguments?.getLong("personId")?.takeIf{it>0L}
-                CommitmentEditScreen(onBack={nav.popBackStack()},initialPersonId=personId)
-            }
+            composable("${R.COMMITMENT_EDIT}?personId={personId}",arguments=listOf(navArgument("personId"){type=NavType.LongType;defaultValue=-1L})){entry->val personId=entry.arguments?.getLong("personId")?.takeIf{it>0L};CommitmentEditScreen(onBack={nav.popBackStack()},initialPersonId=personId)}
             composable(R.BUDGETS){BudgetsScreen({nav.popBackStack()},{nav.navigate(R.BUDGET_DETAIL)})}
             composable(R.BUDGET_DETAIL){BudgetDetailScreen{nav.popBackStack()}}
             composable(R.GOALS){GoalsScreen({nav.popBackStack()},{nav.navigate(R.GOAL_EDIT)})}
@@ -117,52 +113,7 @@ fun FlosiApp(){
     }
 }
 
-@Composable
-private fun RootBottomBar(current:String?,onGo:(String)->Unit){
-    Surface(
-        modifier = Modifier.navigationBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 12.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            PremiumNavItem(current==R.ME, Icons.Default.Person, flosiText("me")){onGo(R.ME)}
-            PremiumNavItem(current==R.PEOPLE, Icons.Default.Person, flosiText("people")){onGo(R.PEOPLE)}
-            Box(
-                modifier = Modifier.size(58.dp).background(
-                    Brush.linearGradient(listOf(FlosiPurple, FlosiPurpleDeep)),
-                    CircleShape
-                ),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick={onGo("add")}) { Icon(Icons.Default.Add, contentDescription=flosiText("add"), tint=Color.White, modifier=Modifier.size(27.dp)) }
-            }
-            PremiumNavItem(current==R.ACTIVITY, Icons.Default.ReceiptLong, flosiText("activity")){onGo(R.ACTIVITY)}
-            PremiumNavItem(current==R.TODAY, Icons.Default.Home, flosiText("today")){onGo(R.TODAY)}
-        }
-    }
-}
+@Composable private fun RootBottomBar(current:String?,onGo:(String)->Unit){Surface(modifier=Modifier.navigationBarsPadding().padding(horizontal=14.dp,vertical=10.dp),shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surface,shadowElevation=12.dp,tonalElevation=2.dp){Row(modifier=Modifier.fillMaxWidth().padding(horizontal=6.dp,vertical=7.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){PremiumNavItem(current==R.ME,Icons.Default.Person,flosiText("me")){onGo(R.ME)};PremiumNavItem(current==R.PEOPLE,Icons.Default.Person,flosiText("people")){onGo(R.PEOPLE)};Box(modifier=Modifier.size(58.dp).background(Brush.linearGradient(listOf(FlosiPurple,FlosiPurpleDeep)),CircleShape),contentAlignment=Alignment.Center){IconButton(onClick={onGo("add")}){Icon(Icons.Default.Add,contentDescription=flosiText("add"),tint=Color.White,modifier=Modifier.size(27.dp))}};PremiumNavItem(current==R.ACTIVITY,Icons.Default.ReceiptLong,flosiText("activity")){onGo(R.ACTIVITY)};PremiumNavItem(current==R.TODAY,Icons.Default.Home,flosiText("today")){onGo(R.TODAY)}}}}
 
-@Composable
-private fun PremiumNavItem(selected:Boolean,icon:androidx.compose.ui.graphics.vector.ImageVector,label:String,onClick:()->Unit){
-    val tint = if(selected) FlosiPurple else MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(
-        modifier = Modifier.sizeIn(minWidth = 56.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = if(selected) FlosiPurple.copy(alpha = .10f) else Color.Transparent,
-        onClick = onClick,
-    ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-            Icon(icon,null,tint=tint,modifier=Modifier.size(20.dp))
-            Spacer(Modifier.height(3.dp))
-            Text(label,color=tint,style=MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
+@Composable private fun PremiumNavItem(selected:Boolean,icon:androidx.compose.ui.graphics.vector.ImageVector,label:String,onClick:()->Unit){val tint=if(selected)FlosiPurple else MaterialTheme.colorScheme.onSurfaceVariant;Surface(modifier=Modifier.sizeIn(minWidth=56.dp),shape=RoundedCornerShape(18.dp),color=if(selected)FlosiPurple.copy(alpha=.10f)else Color.Transparent,onClick=onClick){Column(Modifier.padding(horizontal=10.dp,vertical=7.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(icon,null,tint=tint,modifier=Modifier.size(20.dp));Spacer(Modifier.height(3.dp));Text(label,color=tint,style=MaterialTheme.typography.labelSmall)}}}
 private tailrec fun Context.findActivity():Activity?=when(this){is Activity->this;is ContextWrapper->baseContext.findActivity();else->null}
