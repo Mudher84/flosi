@@ -1,10 +1,15 @@
 package com.flosi.app.auth
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +24,7 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import com.flosi.app.BuildConfig
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -30,54 +35,68 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 private val Purple = Color(0xFF7B44EF)
+private val PurpleSoft = Color(0xFFF5F0FF)
 private val TextMain = Color(0xFF17131F)
 private val Muted = Color(0xFF8F8798)
 private val Green = Color(0xFF18B97D)
 private val Red = Color(0xFFE84C61)
 
+private tailrec fun Context.activity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.activity()
+    else -> null
+}
+
 private object CloudAuth {
     fun configured(): Boolean =
         BuildConfig.FLOSI_FIREBASE_API_KEY.isNotBlank() &&
             BuildConfig.FLOSI_FIREBASE_APP_ID.isNotBlank() &&
-            BuildConfig.FLOSI_FIREBASE_PROJECT_ID.isNotBlank()
-
-    fun googleConfigured(): Boolean = BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID.isNotBlank()
+            BuildConfig.FLOSI_FIREBASE_PROJECT_ID.isNotBlank() &&
+            BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID.isNotBlank()
 
     fun auth(context: Context): FirebaseAuth {
         val app = FirebaseApp.getApps(context).firstOrNull { it.name == "flosi-auth" } ?: run {
-            check(configured()) { "إعداد Firebase غير مكتمل" }
+            check(configured()) { "إعداد Firebase أو Google غير مكتمل" }
             val options = FirebaseOptions.Builder()
                 .setApiKey(BuildConfig.FLOSI_FIREBASE_API_KEY)
                 .setApplicationId(BuildConfig.FLOSI_FIREBASE_APP_ID)
                 .setProjectId(BuildConfig.FLOSI_FIREBASE_PROJECT_ID)
                 .build()
-            FirebaseApp.initializeApp(context, options, "flosi-auth")
+            FirebaseApp.initializeApp(context.applicationContext, options, "flosi-auth")
                 ?: error("تعذر تهيئة تسجيل الدخول في Flosi")
         }
         return FirebaseAuth.getInstance(app)
     }
 
     suspend fun google(context: Context): FirebaseUser {
-        check(googleConfigured()) { "إعداد Google OAuth غير مكتمل" }
-        val option = GetSignInWithGoogleOption.Builder(BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID).build()
-        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-        val credential = CredentialManager.create(context).getCredential(context, request).credential
+        val activity = context.activity() ?: error("تعذر العثور على شاشة Android النشطة لتسجيل Google")
+        val option = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID)
+            .setAutoSelectEnabled(false)
+            .build()
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(option)
+            .build()
+        val credential = CredentialManager.create(activity)
+            .getCredential(activity, request)
+            .credential
         require(
             credential is CustomCredential &&
                 credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
         ) { "لم يرجع Google بيانات دخول صالحة" }
         val token = GoogleIdTokenCredential.createFrom(credential.data).idToken
-        val result = auth(context)
+        val result = auth(activity)
             .signInWithCredential(GoogleAuthProvider.getCredential(token, null))
             .await()
         return result.user ?: error("تعذر إنشاء جلسة Flosi")
     }
 
-    suspend fun passwordLogin(context: Context, email: String, password: String): FirebaseUser =
+    suspend fun emailLogin(context: Context, email: String, password: String): FirebaseUser =
         auth(context).signInWithEmailAndPassword(email.trim(), password).await().user
             ?: error("تعذر تسجيل الدخول")
 
-    suspend fun createEmailAccount(context: Context, email: String, password: String): FirebaseUser =
+    suspend fun emailRegister(context: Context, email: String, password: String): FirebaseUser =
         auth(context).createUserWithEmailAndPassword(email.trim(), password).await().user
             ?: error("تعذر إنشاء الحساب")
 
@@ -104,7 +123,7 @@ private fun strength(value: String) = Strength(
     symbol = value.any { !it.isLetterOrDigit() && !it.isWhitespace() },
 )
 
-private enum class Stage { LOGIN, RESET }
+private enum class Stage { CHOICE, EMAIL, REGISTER, RESET }
 
 @Composable
 fun FlosiAuthGate(content: @Composable () -> Unit) {
@@ -116,7 +135,7 @@ fun FlosiAuthGate(content: @Composable () -> Unit) {
 
     val auth = remember { CloudAuth.auth(context) }
     var user by remember { mutableStateOf(auth.currentUser) }
-    var stage by remember { mutableStateOf(Stage.LOGIN) }
+    var stage by remember { mutableStateOf(Stage.CHOICE) }
 
     DisposableEffect(auth) {
         val listener = FirebaseAuth.AuthStateListener { user = it.currentUser }
@@ -130,11 +149,21 @@ fun FlosiAuthGate(content: @Composable () -> Unit) {
     }
 
     when (stage) {
-        Stage.LOGIN -> Login(
-            onAuthenticated = { user = it },
-            onReset = { stage = Stage.RESET },
+        Stage.CHOICE -> Choice(
+            onSignedIn = { user = it },
+            onEmail = { stage = Stage.EMAIL },
         )
-        Stage.RESET -> ResetPassword("") { stage = Stage.LOGIN }
+        Stage.EMAIL -> EmailLogin(
+            onSignedIn = { user = it },
+            onRegister = { stage = Stage.REGISTER },
+            onReset = { stage = Stage.RESET },
+            onBack = { stage = Stage.CHOICE },
+        )
+        Stage.REGISTER -> EmailRegister(
+            onSignedIn = { user = it },
+            onBack = { stage = Stage.EMAIL },
+        )
+        Stage.RESET -> ResetPassword("") { stage = Stage.EMAIL }
     }
 }
 
@@ -142,30 +171,24 @@ fun FlosiAuthGate(content: @Composable () -> Unit) {
 private fun MissingConfig() = AuthPage {
     Text("Flosi", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(8.dp))
-    Text("نظام الحساب يحتاج إعداد Firebase الخاص بالتطبيق.", color = Muted)
+    Text("إعداد Firebase أو Google OAuth غير مكتمل.", color = Muted)
     Spacer(Modifier.height(12.dp))
     Text("Flosi لا يفتح الحساب بدون مصادقة صحيحة.", color = Red)
 }
 
 @Composable
-private fun Login(
-    onAuthenticated: (FirebaseUser) -> Unit,
-    onReset: () -> Unit,
+private fun Choice(
+    onSignedIn: (FirebaseUser) -> Unit,
+    onEmail: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var useEmail by remember { mutableStateOf(false) }
-    var createMode by remember { mutableStateOf(false) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirm by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val passwordStrength = strength(password)
 
     AuthPage {
         Text("Flosi", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = TextMain)
-        Text("اختر الطريقة التي تناسبك للدخول", color = Muted)
+        Text("اختر طريقة الدخول", color = Muted)
         Spacer(Modifier.height(22.dp))
 
         Button(
@@ -174,7 +197,7 @@ private fun Login(
                     busy = true
                     error = null
                     try {
-                        onAuthenticated(CloudAuth.google(context))
+                        onSignedIn(CloudAuth.google(context))
                     } catch (e: GetCredentialException) {
                         val detail = e.message?.trim().orEmpty()
                         error = buildString {
@@ -193,138 +216,144 @@ private fun Login(
                     }
                 }
             },
-            enabled = !busy && CloudAuth.googleConfigured(),
+            enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = TextMain),
             shape = RoundedCornerShape(16.dp),
         ) {
-            Text("G   المتابعة باستخدام Google", fontWeight = FontWeight.Bold)
+            if (busy) CircularProgressIndicator(strokeWidth = 2.dp)
+            else Text("G   المتابعة باستخدام Google", fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(12.dp))
 
-        OutlinedButton(
-            onClick = {
-                useEmail = !useEmail
-                error = null
-            },
+        Button(
+            onClick = onEmail,
             enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple),
             shape = RoundedCornerShape(16.dp),
         ) {
-            Text(if (useEmail) "إخفاء تسجيل البريد الإلكتروني" else "الدخول بالبريد الإلكتروني", fontWeight = FontWeight.Bold)
+            Text("الدخول بالبريد الإلكتروني")
         }
 
-        if (useEmail) {
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                HorizontalDivider(Modifier.weight(1f))
-                Text("  البريد الإلكتروني  ", color = Muted)
-                HorizontalDivider(Modifier.weight(1f))
-            }
+        error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 14.dp)) }
+    }
+}
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = !createMode,
-                    onClick = {
-                        createMode = false
-                        confirm = ""
-                        error = null
-                    },
-                    label = { Text("تسجيل دخول") },
-                    modifier = Modifier.weight(1f),
-                )
-                FilterChip(
-                    selected = createMode,
-                    onClick = {
-                        createMode = true
-                        error = null
-                    },
-                    label = { Text("إنشاء حساب") },
-                    modifier = Modifier.weight(1f),
-                )
-            }
+@Composable
+private fun EmailLogin(
+    onSignedIn: (FirebaseUser) -> Unit,
+    onRegister: () -> Unit,
+    onReset: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
 
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("البريد الإلكتروني") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("كلمة المرور") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-            )
-
-            if (createMode) {
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = confirm,
-                    onValueChange = { confirm = it },
-                    label = { Text("تأكيد كلمة المرور") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "لإنشاء الحساب: 12 حرفاً على الأقل مع حرف كبير وصغير ورقم ورمز خاص.",
-                    color = if (passwordStrength.strong) Green else Muted,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            } else {
-                TextButton(onClick = onReset, modifier = Modifier.align(Alignment.Start)) {
-                    Text("نسيت كلمة المرور؟", color = Purple)
-                }
-            }
-
-            Button(
-                onClick = {
-                    scope.launch {
-                        busy = true
-                        error = null
-                        try {
-                            val result = if (createMode) {
-                                require(passwordStrength.strong) { "كلمة المرور لا تحقق شروط الأمان" }
-                                require(password == confirm) { "كلمتا المرور غير متطابقتين" }
-                                CloudAuth.createEmailAccount(context, email, password)
-                            } else {
-                                CloudAuth.passwordLogin(context, email, password)
-                            }
-                            onAuthenticated(result)
-                        } catch (t: Throwable) {
-                            error = t.message ?: if (createMode) "تعذر إنشاء الحساب" else "البريد أو كلمة المرور غير صحيحة"
-                        } finally {
-                            busy = false
-                        }
+    AuthPage {
+        Text("الدخول بالبريد الإلكتروني", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(18.dp))
+        OutlinedTextField(email, { email = it }, label = { Text("البريد الإلكتروني") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(password, { password = it }, label = { Text("كلمة المرور") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        TextButton(onClick = onReset, modifier = Modifier.align(Alignment.Start)) { Text("نسيت كلمة المرور؟", color = Purple) }
+        Button(
+            onClick = {
+                scope.launch {
+                    busy = true
+                    error = null
+                    try {
+                        onSignedIn(CloudAuth.emailLogin(context, email, password))
+                    } catch (_: Throwable) {
+                        error = "البريد أو كلمة المرور غير صحيحة."
+                    } finally {
+                        busy = false
                     }
-                },
-                enabled = !busy && email.isNotBlank() && password.isNotBlank() &&
-                    (!createMode || (passwordStrength.strong && password == confirm)),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Purple),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White)
-                else Text(if (createMode) "إنشاء الحساب والدخول" else "تسجيل الدخول")
+                }
+            },
+            enabled = !busy && email.isNotBlank() && password.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White) else Text("تسجيل الدخول")
+        }
+        OutlinedButton(onClick = onRegister, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text("إنشاء حساب جديد") }
+        error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 12.dp)) }
+        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("العودة") }
+    }
+}
+
+@Composable
+private fun EmailRegister(
+    onSignedIn: (FirebaseUser) -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var email by remember { mutableStateOf("") }
+    var pass by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val s = strength(pass)
+
+    AuthPage {
+        Text("إنشاء حساب جديد", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
+        OutlinedTextField(email, { email = it }, label = { Text("البريد الإلكتروني") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(pass, { pass = it }, label = { Text("كلمة مرور قوية") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(confirm, { confirm = it }, label = { Text("تأكيد كلمة المرور") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        Spacer(Modifier.height(12.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = PurpleSoft), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Rule("12 حرفاً على الأقل", s.len)
+                Rule("حرف صغير", s.lower)
+                Rule("حرف كبير", s.upper)
+                Rule("رقم واحد على الأقل", s.digit)
+                Rule("رمز خاص مثل ! @ # $", s.symbol)
             }
         }
-
-        error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 12.dp)) }
+        error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 10.dp)) }
         Spacer(Modifier.height(14.dp))
-        Text("يمكنك استخدام Google مباشرة أو إنشاء حساب مستقل بالبريد الإلكتروني.", color = Muted)
+        Button(
+            onClick = {
+                scope.launch {
+                    busy = true
+                    error = null
+                    try {
+                        require(pass == confirm) { "كلمتا المرور غير متطابقتين" }
+                        onSignedIn(CloudAuth.emailRegister(context, email, pass))
+                    } catch (t: Throwable) {
+                        error = t.message ?: "تعذر إنشاء الحساب"
+                    } finally {
+                        busy = false
+                    }
+                }
+            },
+            enabled = !busy && email.isNotBlank() && s.strong && pass == confirm,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White) else Text("إنشاء الحساب والدخول")
+        }
+        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("لدي حساب بالفعل") }
+    }
+}
+
+@Composable
+private fun Rule(label: String, ok: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (ok) Icons.Default.CheckCircle else Icons.Default.Lock, null, tint = if (ok) Green else Muted)
+        Text("  $label", color = if (ok) Green else Muted)
     }
 }
 
@@ -339,16 +368,9 @@ private fun ResetPassword(initialEmail: String, onBack: () -> Unit) {
 
     AuthPage {
         Text("استعادة كلمة المرور", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("أدخل البريد الإلكتروني المرتبط بحساب Flosi وسنرسل إليه رابط إعادة التعيين.", color = Muted)
+        Text("أدخل البريد المرتبط بحساب Flosi.", color = Muted)
         Spacer(Modifier.height(18.dp))
-        OutlinedTextField(
-            email,
-            { email = it },
-            label = { Text("البريد الإلكتروني") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-        )
+        OutlinedTextField(email, { email = it }, label = { Text("البريد الإلكتروني") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = {
@@ -370,12 +392,11 @@ private fun ResetPassword(initialEmail: String, onBack: () -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = Purple),
             shape = RoundedCornerShape(16.dp),
         ) {
-            if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White)
-            else Text("إرسال رابط الاستعادة")
+            if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White) else Text("إرسال رابط الاستعادة")
         }
-        if (sent) Text("تم طلب رسالة الاستعادة. افحص بريدك ثم سجّل الدخول بكلمة المرور الجديدة.", color = Green, modifier = Modifier.padding(top = 12.dp))
+        if (sent) Text("تم إرسال طلب الاستعادة. افحص بريدك.", color = Green, modifier = Modifier.padding(top = 12.dp))
         error?.let { Text(it, color = Red, modifier = Modifier.padding(top = 12.dp)) }
-        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("العودة لتسجيل الدخول") }
+        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("العودة") }
     }
 }
 
@@ -392,6 +413,7 @@ private fun AuthPage(content: @Composable ColumnScope.() -> Unit) {
                 Column(
                     modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     content = content,
                 )
             }
