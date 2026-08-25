@@ -12,7 +12,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.android.billingclient.api.*
 import com.flosi.app.BuildConfig
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +28,7 @@ private const val TRIAL_DAYS = 30L
 private const val DAY_MS = 86_400_000L
 private const val ENTITLEMENT_GRACE_MS = 3L * DAY_MS
 private const val TRIAL_ROLLOUT_MS = 1_787_574_600_000L // 2026-08-24 12:30 UTC
+private const val FLOSI_AUTH_APP_NAME = "flosi-auth"
 
 sealed interface SubscriptionState {
     data object Checking : SubscriptionState
@@ -93,8 +96,13 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         evaluateTrialOrExpiry()
     }
 
+    private fun authenticatedUser(): FirebaseUser? {
+        val app = FirebaseApp.getApps(context).firstOrNull { it.name == FLOSI_AUTH_APP_NAME } ?: return null
+        return FirebaseAuth.getInstance(app).currentUser
+    }
+
     private suspend fun evaluateTrialOrExpiry() {
-        val user = FirebaseAuth.getInstance().currentUser
+        val user = authenticatedUser()
         if (user == null) {
             _state.value = SubscriptionState.Error("تعذر التحقق من حساب Flosi")
             return
@@ -115,7 +123,7 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         }
     }
 
-    private suspend fun trustedNow(user: com.google.firebase.auth.FirebaseUser): Long {
+    private suspend fun trustedNow(user: FirebaseUser): Long {
         val stored = prefs.getLong("trusted_now", 0L)
         val issuedAt = runCatching { user.getIdToken(true).await().issuedAtTimestamp }.getOrNull() ?: 0L
         val candidate = maxOf(stored, issuedAt)
