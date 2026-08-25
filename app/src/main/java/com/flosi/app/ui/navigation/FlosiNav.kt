@@ -64,7 +64,7 @@ fun FlosiApp(){
     val nav=rememberNavController();val current=nav.currentBackStackEntryAsState().value?.destination?.route;val rootRoutes=setOf(R.TODAY,R.ACTIVITY,R.PEOPLE,R.ME)
     Scaffold(bottomBar={if(current in rootRoutes)RootBottomBar(current){route->if(route=="add")nav.navigate(R.TX_ADD)else nav.navigate(route){launchSingleTop=true;restoreState=true;popUpTo(R.TODAY){saveState=true}}}}){padding->
         NavHost(navController=nav,startDestination=R.TODAY,modifier=Modifier.padding(padding)){
-            composable(R.TODAY){TodayScreen(onActivity={nav.navigate(R.ACTIVITY)},onNotifications={nav.navigate(R.NOTIFICATIONS)})}
+            composable(R.TODAY){TodayScreen(onActivity={nav.navigate(R.ACTIVITY)},onNotifications={nav.navigate(R.NOTIFICATIONS)},onCommitments={nav.navigate(R.COMMITMENTS)})}
             composable(R.ACTIVITY){ActivityScreen(onOpenDetail={id->nav.navigate("${R.TX_DETAIL}/$id")},onAdd={nav.navigate(R.TX_ADD)})}
             composable("${R.TX_DETAIL}/{id}",arguments=listOf(navArgument("id"){type=NavType.LongType})){entry->TransactionDetailScreen(entry.arguments?.getLong("id")?:0L){nav.popBackStack()}}
             composable(R.TX_ADD){entry->
