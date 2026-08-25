@@ -6,6 +6,8 @@
     <application
         android:name=".FlosiApplication"
         android:allowBackup="false"
+        android:icon="@drawable/flosi_launcher_icon"
+        android:roundIcon="@drawable/flosi_launcher_icon"
         android:label="Flosi"
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
