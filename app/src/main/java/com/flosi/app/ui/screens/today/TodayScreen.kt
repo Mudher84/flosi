@@ -15,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,224 +34,36 @@ import kotlin.math.max
 
 @Composable
 fun TodayScreen(onActivity: () -> Unit,onNotifications: () -> Unit,onCommitments: () -> Unit) {
-    val vm: HomeViewModel = flosiViewModel()
-    val planningVm: PlanningViewModel = flosiViewModel()
-    val state by vm.state.collectAsState()
-    val commitments by planningVm.commitments.collectAsState()
-    val accounts by planningVm.accounts.collectAsState()
-    val prefs by planningVm.preferences.collectAsState()
-    val currency=state.dashboard.baseCurrency
-    val netMonth = state.dashboard.monthIncome - state.dashboard.monthExpense
-    val reservedTotal = state.reservedCommitments + state.reservedGoals
-    val safeToSpend = max(0L, state.dashboard.totalBalance - reservedTotal)
-    val language=LocalFlosiLanguage.current
-    val now=System.currentTimeMillis()
-    val weekEnd=now+7L*86_400_000L
-    val accountMap=remember(accounts){accounts.associateBy{it.id}}
-    fun convertedAmount(amount:Long,accountId:Long?):Long? {
-        val source=accountId?.let(accountMap::get)?.currency ?: currency
-        return CurrencyConverter.convert(amount,source,currency,prefs.exchangeRates)
-    }
-    val overdue=commitments.filter{it.dueAt<now}.sortedBy{it.dueAt}
-    val upcoming=commitments.filter{it.dueAt>=now&&it.dueAt<=weekEnd}.sortedBy{it.dueAt}
-    val overdueTotal=overdue.mapNotNull{convertedAmount(it.amount,it.accountId)}.fold(0L){a,b->runCatching{Math.addExact(a,b)}.getOrElse{Long.MAX_VALUE}}
-    val upcomingTotal=upcoming.mapNotNull{convertedAmount(it.amount,it.accountId)}.fold(0L){a,b->runCatching{Math.addExact(a,b)}.getOrElse{Long.MAX_VALUE}}
-    val calendar=Calendar.getInstance()
-    val remainingDays=(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)-calendar.get(Calendar.DAY_OF_MONTH)+1).coerceAtLeast(1)
-    val safeDaily=safeToSpend/remainingDays
+    val vm: HomeViewModel = flosiViewModel(); val planningVm: PlanningViewModel = flosiViewModel()
+    val state by vm.state.collectAsState(); val commitments by planningVm.commitments.collectAsState(); val accounts by planningVm.accounts.collectAsState(); val prefs by planningVm.preferences.collectAsState()
+    val currency=state.dashboard.baseCurrency; val netMonth=state.dashboard.monthIncome-state.dashboard.monthExpense; val safeToSpend=max(0L,state.dashboard.totalBalance-state.reservedCommitments-state.reservedGoals); val language=LocalFlosiLanguage.current
+    val now=System.currentTimeMillis(); val weekEnd=now+7L*86_400_000L; val accountMap=remember(accounts){accounts.associateBy{it.id}}
+    fun convertedAmount(amount:Long,accountId:Long?):Long? { val source=accountId?.let(accountMap::get)?.currency?:currency; return CurrencyConverter.convert(amount,source,currency,prefs.exchangeRates) }
+    val overdue=commitments.filter{it.dueAt<now}.sortedBy{it.dueAt}; val upcoming=commitments.filter{it.dueAt>=now&&it.dueAt<=weekEnd}.sortedBy{it.dueAt}
+    val overdueTotal=overdue.mapNotNull{convertedAmount(it.amount,it.accountId)}.fold(0L){a,b->runCatching{Math.addExact(a,b)}.getOrElse{Long.MAX_VALUE}}; val upcomingTotal=upcoming.mapNotNull{convertedAmount(it.amount,it.accountId)}.fold(0L){a,b->runCatching{Math.addExact(a,b)}.getOrElse{Long.MAX_VALUE}}
+    val calendar=Calendar.getInstance(); val remainingDays=(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)-calendar.get(Calendar.DAY_OF_MONTH)+1).coerceAtLeast(1); val safeDaily=safeToSpend/remainingDays
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(FlosiBg).statusBarsPadding(),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(13.dp)
-    ) {
-        item {
-            Row(Modifier.fillMaxWidth(),verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f),horizontalAlignment = Alignment.Start) {
-                    Text(localizedLegacyText("صباح الخير"), color = FlosiMuted, fontSize = 11.sp)
-                    Text("Flosi", color = FlosiText, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                }
-                Surface(Modifier.size(44.dp).clickable(onClick = onNotifications),CircleShape,Color.White,shadowElevation = 1.dp) {
-                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.NotificationsNone,localizedLegacyText("الإشعارات"),tint = FlosiText) }
-                }
-            }
-        }
-
-        if(state.dashboard.hasUnconvertedCurrencies) item {
-            Surface(color=Color(0xFFFFF6E7),shape=RoundedCornerShape(18.dp)) {
-                Text(
-                    if(language=="ar") "بعض العملات غير داخلة في الإجماليات: ${state.dashboard.unconvertedCurrencies.joinToString()}. أضف أسعار التحويل من الإعدادات."
-                    else "Some currencies are excluded from totals: ${state.dashboard.unconvertedCurrencies.joinToString()}. Add exchange rates in settings.",
-                    modifier=Modifier.padding(13.dp),color=FlosiOrange,fontSize=11.sp
-                )
-            }
-        }
-
-        item { BalanceHero(state.dashboard.totalBalance,state.dashboard.monthIncome,state.dashboard.monthExpense,netMonth,currency,language) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SnapshotCard(localizedLegacyText("المقبوض اليوم"), state.dashboard.todayIncome, true,currency, Modifier.weight(1f))
-                SnapshotCard(localizedLegacyText("المصروف اليوم"), state.dashboard.todayExpense, false,currency, Modifier.weight(1f))
-            }
-        }
-        item { SafeSpendCard(safeToSpend,state.reservedCommitments,state.reservedGoals,currency,language) }
-        item { DailyAllowanceCard(safeDaily,remainingDays,currency,language) }
-        item { DueSoonCard(overdue,upcoming,overdueTotal,upcomingTotal,currency,language,onCommitments) }
-        item { SmartInsightCard(state.dashboard.monthIncome, state.dashboard.monthExpense,language) }
-        item { SectionTitle(localizedLegacyText("آخر الحركات"), localizedLegacyText("عرض الكل"), onActivity) }
-        item {
-            CardBox {
-                if (state.recent.isEmpty()) Text(localizedLegacyText("ماكو حركات بعد"), color = FlosiMuted)
-                else state.recent.take(4).forEachIndexed { index, tx ->
-                    val incoming = tx.kind in listOf("income", "invoice_payment","debt_received")
-                    val neutral = tx.kind in listOf("transfer_in","transfer_out","goal_saving")
-                    val value = when {
-                        tx.kind=="goal_saving" -> if(language=="ar") "حجز ${moneyText(tx.amount,tx.accountCurrency)}" else "Reserved ${moneyText(tx.amount,tx.accountCurrency)}"
-                        neutral -> moneyText(tx.amount,tx.accountCurrency)
-                        incoming -> "+"+moneyText(tx.amount,tx.accountCurrency)
-                        else -> "−"+moneyText(tx.amount,tx.accountCurrency)
-                    }
-                    ActionRow(
-                        title = tx.title,
-                        subtitle = listOfNotNull(tx.categoryName, tx.accountName).joinToString(" • "),
-                        value = value,
-                        accent = when { neutral->FlosiPurple; incoming->FlosiGreen; else->FlosiRed },
-                        onClick = onActivity
-                    )
-                    if (index < state.recent.take(4).lastIndex) HorizontalDivider(color = FlosiLine)
-                }
-            }
-        }
-        item { SectionTitle(localizedLegacyText("أعلى المصروفات")) }
-        item {
-            CardBox {
-                if (state.topCategories.isEmpty()) Text(localizedLegacyText("تظهر بعد تسجيل مصروفات"), color = FlosiMuted)
-                else {
-                    val accents = listOf(FlosiOrange, FlosiBlue, FlosiPurple, FlosiGreen)
-                    state.topCategories.take(4).forEachIndexed { index, category ->
-                        ActionRow(category.categoryName,localizedLegacyText("هذا الشهر"),moneyText(category.amount,currency),accents[index % accents.size])
-                    }
-                }
-            }
-        }
+    LazyColumn(modifier=Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding(),contentPadding=PaddingValues(horizontal=20.dp,vertical=16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
+        item{PremiumHeader(language,onNotifications)}
+        if(state.dashboard.hasUnconvertedCurrencies)item{Surface(color=FlosiOrange.copy(alpha=.10f),shape=RoundedCornerShape(20.dp)){Text(if(language=="ar")"بعض العملات غير داخلة في الإجماليات: ${state.dashboard.unconvertedCurrencies.joinToString()}. أضف أسعار التحويل من الإعدادات." else "Some currencies are excluded from totals: ${state.dashboard.unconvertedCurrencies.joinToString()}. Add exchange rates in settings.",Modifier.padding(14.dp),color=FlosiOrange,fontSize=11.sp,fontWeight=FontWeight.SemiBold)}}
+        item{BalanceHero(state.dashboard.totalBalance,state.dashboard.monthIncome,state.dashboard.monthExpense,netMonth,currency,language)}
+        item{MoneyPulse(safeToSpend,safeDaily,remainingDays,currency,language)}
+        item{Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){SnapshotCard(localizedLegacyText("المقبوض اليوم"),state.dashboard.todayIncome,true,currency,Modifier.weight(1f));SnapshotCard(localizedLegacyText("المصروف اليوم"),state.dashboard.todayExpense,false,currency,Modifier.weight(1f))}}
+        item{DueSoonCard(overdue,upcoming,overdueTotal,upcomingTotal,currency,language,onCommitments)}
+        item{SmartInsightCard(state.dashboard.monthIncome,state.dashboard.monthExpense,language)}
+        item{SectionTitle(localizedLegacyText("آخر الحركات"),localizedLegacyText("عرض الكل"),onActivity)}
+        item{CardBox{if(state.recent.isEmpty())Text(localizedLegacyText("ماكو حركات بعد"),color=MaterialTheme.colorScheme.onSurfaceVariant) else state.recent.take(4).forEachIndexed{index,tx->val incoming=tx.kind in listOf("income","invoice_payment","debt_received");val neutral=tx.kind in listOf("transfer_in","transfer_out","goal_saving");val value=when{tx.kind=="goal_saving"->if(language=="ar")"حجز ${moneyText(tx.amount,tx.accountCurrency)}" else "Reserved ${moneyText(tx.amount,tx.accountCurrency)}";neutral->moneyText(tx.amount,tx.accountCurrency);incoming->"+"+moneyText(tx.amount,tx.accountCurrency);else->"−"+moneyText(tx.amount,tx.accountCurrency)};ActionRow(tx.title,listOfNotNull(tx.categoryName,tx.accountName).joinToString(" • "),value,when{neutral->FlosiPurple;incoming->FlosiGreen;else->FlosiRed},onActivity);if(index<state.recent.take(4).lastIndex)HorizontalDivider(color=MaterialTheme.colorScheme.outline)}}}
+        item{SectionTitle(localizedLegacyText("أعلى المصروفات"))}
+        item{CardBox{if(state.topCategories.isEmpty())Text(localizedLegacyText("تظهر بعد تسجيل مصروفات"),color=MaterialTheme.colorScheme.onSurfaceVariant) else{val accents=listOf(FlosiOrange,FlosiBlue,FlosiPurple,FlosiGreen);state.topCategories.take(4).forEachIndexed{index,category->ActionRow(category.categoryName,localizedLegacyText("هذا الشهر"),moneyText(category.amount,currency),accents[index%accents.size])}}}}
+        item{Spacer(Modifier.height(8.dp))}
     }
 }
 
-@Composable
-private fun BalanceHero(totalBalance:Long,monthIncome:Long,monthExpense:Long,netMonth:Long,currency:String,language:String) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(FlosiHeroBrush).padding(22.dp)) {
-        Box(Modifier.size(180.dp).offset(x = 92.dp, y = (-78).dp).background(Color.White.copy(alpha = .06f), CircleShape))
-        Column(Modifier.fillMaxWidth(),horizontalAlignment = Alignment.Start) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f),horizontalAlignment = Alignment.Start) {
-                    Text(localizedLegacyText("إجمالي أموالك"), color = Color.White.copy(alpha = .80f), fontSize = 12.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(moneyText(totalBalance,currency), color = Color.White, fontSize = 31.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if(language=="ar") if (netMonth >= 0) "هذا الشهر موجب ${moneyText(netMonth,currency)}" else "هذا الشهر ناقص ${moneyText(netMonth,currency)}"
-                        else if(netMonth>=0) "This month +${moneyText(netMonth,currency)}" else "This month −${moneyText(netMonth,currency)}",
-                        color = Color.White.copy(alpha = .80f),fontSize = 10.sp
-                    )
-                }
-                Surface(color = Color.White.copy(alpha = .15f),shape = RoundedCornerShape(50)) {
-                    Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp),verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Visibility,null,tint = Color.White,modifier = Modifier.size(14.dp));Spacer(Modifier.width(5.dp));Text(currency,color = Color.White,fontSize = 10.sp,fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-            Spacer(Modifier.height(22.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HeroStat(localizedLegacyText("دخل هذا الشهر"), monthIncome,currency, Modifier.weight(1f));HeroStat(localizedLegacyText("مصروف هذا الشهر"), monthExpense,currency, Modifier.weight(1f))
-            }
-        }
-    }
-}
+@Composable private fun PremiumHeader(language:String,onNotifications:()->Unit){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text(if(language=="ar")"أهلاً بك في" else "Welcome to",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=11.sp,fontWeight=FontWeight.Medium);Text("Flosi",color=MaterialTheme.colorScheme.onBackground,fontSize=30.sp,fontWeight=FontWeight.Black,letterSpacing=(-.8).sp)};Surface(Modifier.size(48.dp).clickable(onClick=onNotifications),CircleShape,MaterialTheme.colorScheme.surface,shadowElevation=4.dp,tonalElevation=1.dp){Box(contentAlignment=Alignment.Center){Icon(Icons.Default.NotificationsNone,localizedLegacyText("الإشعارات"),tint=MaterialTheme.colorScheme.onSurface)}}}}
 
-@Composable private fun HeroStat(label:String,value:Long,currency:String,modifier:Modifier=Modifier){
-    Column(modifier.background(Color.White.copy(alpha=.13f),RoundedCornerShape(18.dp)).padding(horizontal=12.dp,vertical=10.dp),horizontalAlignment=Alignment.Start){
-        Text(label,color=Color.White.copy(alpha=.72f),fontSize=10.sp);Text(moneyText(value,currency),color=Color.White,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-    }
-}
-
-@Composable private fun SnapshotCard(title:String,value:Long,positive:Boolean,currency:String,modifier:Modifier=Modifier){
-    val accent=if(positive)FlosiBlue else FlosiRed
-    Card(modifier,shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=Color.White),elevation=CardDefaults.cardElevation(defaultElevation=1.dp)){
-        Column(Modifier.padding(15.dp),horizontalAlignment=Alignment.Start){
-            Surface(Modifier.size(36.dp),RoundedCornerShape(12.dp),accent.copy(alpha=.10f)){Box(contentAlignment=Alignment.Center){Icon(if(positive)Icons.Default.TrendingUp else Icons.Default.TrendingDown,null,tint=accent,modifier=Modifier.size(18.dp))}}
-            Spacer(Modifier.height(11.dp));Text(title,color=FlosiMuted,fontSize=10.sp);Text(moneyText(value,currency),color=FlosiText,fontWeight=FontWeight.Bold,fontSize=16.sp)
-        }
-    }
-}
-
-@Composable private fun SafeSpendCard(safeToSpend:Long,reservedCommitments:Long,reservedGoals:Long,currency:String,language:String){
-    val reservedTotal=reservedCommitments+reservedGoals
-    Card(colors=CardDefaults.cardColors(containerColor=Color.White),shape=RoundedCornerShape(24.dp),elevation=CardDefaults.cardElevation(defaultElevation=1.dp)){
-        Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically){
-            Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){
-                Text(localizedLegacyText("المتاح للصرف بأمان"),color=FlosiMuted,fontSize=11.sp);Text(moneyText(safeToSpend,currency),color=FlosiText,fontSize=20.sp,fontWeight=FontWeight.Bold)
-                Text(
-                    if(reservedTotal>0L) {
-                        if(language=="ar") "بعد حجز ${moneyText(reservedCommitments,currency)} للالتزامات و ${moneyText(reservedGoals,currency)} للأهداف"
-                        else "After reserving ${moneyText(reservedCommitments,currency)} for commitments and ${moneyText(reservedGoals,currency)} for goals"
-                    } else localizedLegacyText("لا توجد مبالغ محجوزة حالياً"),
-                    color=if(reservedTotal>0L)FlosiPurple else FlosiGreen,fontSize=10.sp
-                )
-            }
-            Surface(color=FlosiPurpleSoft,shape=CircleShape,modifier=Modifier.size(48.dp)){Box(contentAlignment=Alignment.Center){Text("◎",color=FlosiPurple,fontSize=22.sp,fontWeight=FontWeight.Bold)}}
-        }
-    }
-}
-
-@Composable private fun DailyAllowanceCard(value:Long,days:Int,currency:String,language:String){
-    Surface(color=Color(0xFFF1ECFF),shape=RoundedCornerShape(22.dp),modifier=Modifier.fillMaxWidth()){
-        Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically){
-            Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){
-                Text(if(language=="ar")"تقدر تصرف اليوم" else "Safe to spend today",color=FlosiPurple,fontSize=11.sp,fontWeight=FontWeight.SemiBold)
-                Text(moneyText(value,currency),color=FlosiText,fontSize=22.sp,fontWeight=FontWeight.Bold)
-                Text(if(language=="ar")"مقسمة على $days يوم متبقي من الشهر" else "Based on $days remaining days this month",color=FlosiMuted,fontSize=10.sp)
-            }
-            Text("◷",color=FlosiPurple,fontSize=25.sp,fontWeight=FontWeight.Bold)
-        }
-    }
-}
-
-@Composable private fun DueSoonCard(
-    overdue:List<com.flosi.app.data.local.entity.CommitmentEntity>,
-    upcoming:List<com.flosi.app.data.local.entity.CommitmentEntity>,
-    overdueTotal:Long,
-    upcomingTotal:Long,
-    currency:String,
-    language:String,
-    onOpen:()->Unit
-){
-    val fmt=remember(language){SimpleDateFormat(if(language=="ar")"dd/MM" else "MMM d",Locale.getDefault())}
-    Card(modifier=Modifier.fillMaxWidth().clickable(onClick=onOpen),colors=CardDefaults.cardColors(containerColor=Color.White),shape=RoundedCornerShape(24.dp),elevation=CardDefaults.cardElevation(defaultElevation=1.dp)){
-        Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-                Text(if(language=="ar")"الاستحقاقات القريبة" else "Upcoming dues",style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
-                Text(if(language=="ar")"عرض الكل" else "View all",color=FlosiPurple,fontSize=11.sp)
-            }
-            if(overdue.isEmpty()&&upcoming.isEmpty()) Text(if(language=="ar")"ما عندك استحقاقات خلال 7 أيام" else "No dues in the next 7 days",color=FlosiGreen,fontSize=11.sp)
-            if(overdue.isNotEmpty()) ActionRow(if(language=="ar")"متأخر (${overdue.size})" else "Overdue (${overdue.size})","",moneyText(overdueTotal,currency),FlosiRed)
-            if(upcoming.isNotEmpty()) ActionRow(if(language=="ar")"خلال 7 أيام (${upcoming.size})" else "Next 7 days (${upcoming.size})","",moneyText(upcomingTotal,currency),FlosiOrange)
-            (overdue+upcoming).sortedBy{it.dueAt}.take(3).forEach{item->
-                HorizontalDivider(color=FlosiLine)
-                ActionRow(item.title,if(language=="ar")"استحقاق ${fmt.format(Date(item.dueAt))}" else "Due ${fmt.format(Date(item.dueAt))}",moneyText(item.amount,currency),if(item.dueAt<System.currentTimeMillis())FlosiRed else FlosiOrange)
-            }
-        }
-    }
-}
-
-@Composable private fun SmartInsightCard(monthIncome:Long,monthExpense:Long,language:String){
-    val ratio=if(monthIncome>0L)monthExpense.toDouble()/monthIncome.toDouble() else 0.0
-    val insight=if(language=="ar") when{monthIncome<=0L->"أضف دخلك حتى أحسب وضعك المالي بدقة";ratio<.50->"مصروفك مضبوط، عندك مساحة جيدة للادخار";ratio<.80->"وضعك متوازن، راقب المصاريف غير الضرورية";else->"مصروفك مرتفع مقارنة بالدخل هذا الشهر"}
-    else when{monthIncome<=0L->"Add your income so Flosi can calculate your financial position accurately";ratio<.50->"Your spending is controlled and you have good room to save";ratio<.80->"Your position is balanced; keep an eye on non-essential spending";else->"Your spending is high compared with income this month"}
-    Surface(color=FlosiDark,shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()){
-        Row(Modifier.padding(horizontal=15.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
-            Surface(shape=CircleShape,color=FlosiPurple,modifier=Modifier.size(30.dp)){Box(contentAlignment=Alignment.Center){Text("✦",color=Color.White,fontSize=12.sp)}}
-            Spacer(Modifier.width(10.dp));Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text(localizedLegacyText("ملخص فلوسي"),color=Color.White,fontWeight=FontWeight.SemiBold,fontSize=12.sp);Text(insight,color=Color.White.copy(alpha=.62f),fontSize=10.sp)}
-            Text(localizedLegacyText("ذكي"),color=Color(0xFFD7C6FF),fontSize=11.sp,fontWeight=FontWeight.Bold)
-        }
-    }
-}
+@Composable private fun BalanceHero(totalBalance:Long,monthIncome:Long,monthExpense:Long,netMonth:Long,currency:String,language:String){PremiumCard{Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Top){Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text(localizedLegacyText("إجمالي أموالك"),color=Color.White.copy(alpha=.60f),fontSize=11.sp);Spacer(Modifier.height(5.dp));Text(moneyText(totalBalance,currency),color=Color.White,fontSize=34.sp,fontWeight=FontWeight.Black,letterSpacing=(-.7).sp);Spacer(Modifier.height(7.dp));Surface(color=(if(netMonth>=0)FlosiGreen else FlosiRed).copy(alpha=.14f),shape=RoundedCornerShape(50)){Text(if(language=="ar")if(netMonth>=0)"▲ صافي الشهر ${moneyText(netMonth,currency)}" else "▼ صافي الشهر ${moneyText(netMonth,currency)}" else if(netMonth>=0)"▲ Monthly net ${moneyText(netMonth,currency)}" else "▼ Monthly net ${moneyText(netMonth,currency)}",Modifier.padding(horizontal=10.dp,vertical=6.dp),color=if(netMonth>=0)Color(0xFF7BE6BB) else Color(0xFFFF9EA6),fontSize=10.sp,fontWeight=FontWeight.Bold)}};Surface(color=Color.White.copy(alpha=.09f),shape=RoundedCornerShape(50)){Row(Modifier.padding(horizontal=10.dp,vertical=7.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Visibility,null,tint=Color.White.copy(alpha=.8f),modifier=Modifier.size(14.dp));Spacer(Modifier.width(5.dp));Text(currency,color=Color.White,fontSize=10.sp,fontWeight=FontWeight.Bold)}}};Spacer(Modifier.height(14.dp));HorizontalDivider(color=Color.White.copy(alpha=.08f));Row(Modifier.fillMaxWidth().padding(top=4.dp),horizontalArrangement=Arrangement.spacedBy(16.dp)){HeroStat(localizedLegacyText("دخل هذا الشهر"),monthIncome,currency,FlosiGreen,Modifier.weight(1f));HeroStat(localizedLegacyText("مصروف هذا الشهر"),monthExpense,currency,Color(0xFFFF8D97),Modifier.weight(1f))}}}
+@Composable private fun HeroStat(label:String,value:Long,currency:String,accent:Color,modifier:Modifier=Modifier){Column(modifier,horizontalAlignment=Alignment.Start){Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(7.dp).background(accent,CircleShape));Spacer(Modifier.width(6.dp));Text(label,color=Color.White.copy(alpha=.55f),fontSize=9.sp)};Spacer(Modifier.height(3.dp));Text(moneyText(value,currency),color=Color.White,fontSize=14.sp,fontWeight=FontWeight.Bold)}}
+@Composable private fun MoneyPulse(safeToSpend:Long,safeDaily:Long,days:Int,currency:String,language:String){Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),shape=RoundedCornerShape(28.dp),elevation=CardDefaults.cardElevation(defaultElevation=2.dp)){Row(Modifier.padding(18.dp),verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(54.dp).background(FlosiPurpleSoft,CircleShape),contentAlignment=Alignment.Center){Text("◎",color=FlosiPurple,fontSize=25.sp,fontWeight=FontWeight.Black)};Spacer(Modifier.width(14.dp));Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text(if(language=="ar")"مساحتك الآمنة" else "Your safe zone",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=10.sp,fontWeight=FontWeight.SemiBold);Text(moneyText(safeToSpend,currency),color=MaterialTheme.colorScheme.onSurface,fontSize=21.sp,fontWeight=FontWeight.Black);Text(if(language=="ar")"حوالي ${moneyText(safeDaily,currency)} يومياً • $days يوم متبقي" else "About ${moneyText(safeDaily,currency)} daily • $days days left",color=FlosiPurple,fontSize=10.sp,fontWeight=FontWeight.Bold)}}}}
+@Composable private fun SnapshotCard(title:String,value:Long,positive:Boolean,currency:String,modifier:Modifier=Modifier){val accent=if(positive)FlosiGreen else FlosiRed;Card(modifier,shape=RoundedCornerShape(26.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),elevation=CardDefaults.cardElevation(defaultElevation=2.dp)){Column(Modifier.padding(16.dp),horizontalAlignment=Alignment.Start){Surface(Modifier.size(38.dp),RoundedCornerShape(13.dp),accent.copy(alpha=.10f)){Box(contentAlignment=Alignment.Center){Icon(if(positive)Icons.Default.TrendingUp else Icons.Default.TrendingDown,null,tint=accent,modifier=Modifier.size(18.dp))}};Spacer(Modifier.height(12.dp));Text(title,color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=10.sp);Text(moneyText(value,currency),color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.Black,fontSize=17.sp)}}}
+@Composable private fun DueSoonCard(overdue:List<com.flosi.app.data.local.entity.CommitmentEntity>,upcoming:List<com.flosi.app.data.local.entity.CommitmentEntity>,overdueTotal:Long,upcomingTotal:Long,currency:String,language:String,onOpen:()->Unit){val fmt=remember(language){SimpleDateFormat(if(language=="ar")"dd/MM" else "MMM d",Locale.getDefault())};Card(modifier=Modifier.fillMaxWidth().clickable(onClick=onOpen),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),shape=RoundedCornerShape(28.dp),elevation=CardDefaults.cardElevation(defaultElevation=2.dp)){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(if(language=="ar")"الاستحقاقات القريبة" else "Upcoming dues",fontSize=16.sp,fontWeight=FontWeight.ExtraBold,modifier=Modifier.weight(1f));Surface(color=FlosiPurpleSoft,shape=RoundedCornerShape(50)){Text(if(language=="ar")"7 أيام" else "7 days",Modifier.padding(horizontal=9.dp,vertical=5.dp),color=FlosiPurpleDeep,fontSize=9.sp,fontWeight=FontWeight.Bold)}};if(overdue.isEmpty()&&upcoming.isEmpty())Text(if(language=="ar")"كلشي هادئ ✦ ما عندك استحقاقات قريبة" else "All clear ✦ No upcoming dues",color=FlosiGreen,fontSize=11.sp);if(overdue.isNotEmpty())ActionRow(if(language=="ar")"متأخر (${overdue.size})" else "Overdue (${overdue.size})","",moneyText(overdueTotal,currency),FlosiRed);if(upcoming.isNotEmpty())ActionRow(if(language=="ar")"قريب (${upcoming.size})" else "Coming up (${upcoming.size})","",moneyText(upcomingTotal,currency),FlosiOrange);(overdue+upcoming).take(2).forEach{item->Text("${item.title} • ${fmt.format(Date(item.dueAt))}",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=10.sp)}}}}
+@Composable private fun SmartInsightCard(income:Long,expense:Long,language:String){val ratio=if(income>0)(expense.toDouble()/income.toDouble()*100).toInt() else 0;Surface(color=FlosiPurpleSoft,shape=RoundedCornerShape(26.dp),modifier=Modifier.fillMaxWidth()){Row(Modifier.padding(18.dp),verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(42.dp).background(Color.White.copy(alpha=.72f),CircleShape),contentAlignment=Alignment.Center){Text("✦",color=FlosiPurple,fontSize=18.sp,fontWeight=FontWeight.Black)};Spacer(Modifier.width(13.dp));Column(horizontalAlignment=Alignment.Start){Text(if(language=="ar")"لمحة فلوسي" else "Flosi insight",color=FlosiPurpleDeep,fontSize=11.sp,fontWeight=FontWeight.ExtraBold);Text(if(language=="ar")if(income>0)"استهلكت $ratio% من دخل الشهر. ${if(ratio<70)"وضعك المالي مريح." else "راقب المصروفات القادمة."}" else "سجّل دخلك حتى نحسب صحتك المالية." else if(income>0)"You've used $ratio% of this month's income. ${if(ratio<70)"You're in a comfortable zone." else "Keep an eye on upcoming spending."}" else "Add income to unlock your financial health insight.",color=MaterialTheme.colorScheme.onSurface,fontSize=11.sp,lineHeight=17.sp)}}}}
