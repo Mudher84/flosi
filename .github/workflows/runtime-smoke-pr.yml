@@ -31,11 +31,8 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -eu
-            APK=$(find app/build/outputs/apk/debug -name '*.apk' -type f | head -n1)
-            test -n "$APK"
-            test -s "$APK"
-            adb install -r "$APK"
+            test -s app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb logcat -c
             adb shell am start -W -n com.flosi.app/.MainActivity | tee launch.txt
             sleep 5
@@ -54,7 +51,7 @@ jobs:
             grep -q 'Flosi' resumed.xml
 
             adb logcat -d > runtime-logcat.txt
-            if grep -E 'FATAL EXCEPTION|ANR in com\.flosi\.app' runtime-logcat.txt; then exit 3; fi
+            ! grep -E 'FATAL EXCEPTION|ANR in com\.flosi\.app' runtime-logcat.txt
             echo FLOSI_ANDROID_ENTRY_RUNTIME_PASS
 
       - name: Upload runtime evidence
