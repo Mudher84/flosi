@@ -20,6 +20,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        normalizeSubscriptionClock()
 
         setContent {
             CompositionLocalProvider(
@@ -41,5 +42,14 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    private fun normalizeSubscriptionClock() {
+        val prefs = getSharedPreferences("flosi_subscription", MODE_PRIVATE)
+        val stored = prefs.getLong("trusted_now", 0L)
+        val normalizedStored = if (stored in 1L until 100_000_000_000L) stored * 1_000L else stored
+        val now = System.currentTimeMillis()
+        val candidate = maxOf(normalizedStored, now)
+        prefs.edit().putLong("trusted_now", candidate).apply()
     }
 }
