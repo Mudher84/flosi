@@ -3,8 +3,10 @@ package com.flosi.app.ui.navigation
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
@@ -12,7 +14,9 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -28,6 +32,7 @@ import androidx.navigation.navArgument
 import com.flosi.app.i18n.flosiText
 import com.flosi.app.security.AppSecurity
 import com.flosi.app.ui.components.FlosiPurple
+import com.flosi.app.ui.components.FlosiPurpleDeep
 import com.flosi.app.ui.screens.accounts.*
 import com.flosi.app.ui.screens.activity.*
 import com.flosi.app.ui.screens.analytics.AnalyticsScreen
@@ -62,7 +67,10 @@ fun FlosiApp(){
     if(locked){FlosiLockScreen(onUnlocked={AppSecurity.markUnlocked(context);locked=false;securityEpoch++});return}
 
     val nav=rememberNavController();val current=nav.currentBackStackEntryAsState().value?.destination?.route;val rootRoutes=setOf(R.TODAY,R.ACTIVITY,R.PEOPLE,R.ME)
-    Scaffold(bottomBar={if(current in rootRoutes)RootBottomBar(current){route->if(route=="add")nav.navigate(R.TX_ADD)else nav.navigate(route){launchSingleTop=true;restoreState=true;popUpTo(R.TODAY){saveState=true}}}}){padding->
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar={if(current in rootRoutes)RootBottomBar(current){route->if(route=="add")nav.navigate(R.TX_ADD)else nav.navigate(route){launchSingleTop=true;restoreState=true;popUpTo(R.TODAY){saveState=true}}}}
+    ){padding->
         NavHost(navController=nav,startDestination=R.TODAY,modifier=Modifier.padding(padding)){
             composable(R.TODAY){TodayScreen(onActivity={nav.navigate(R.ACTIVITY)},onNotifications={nav.navigate(R.NOTIFICATIONS)},onCommitments={nav.navigate(R.COMMITMENTS)})}
             composable(R.ACTIVITY){ActivityScreen(onOpenDetail={id->nav.navigate("${R.TX_DETAIL}/$id")},onAdd={nav.navigate(R.TX_ADD)})}
@@ -109,5 +117,52 @@ fun FlosiApp(){
     }
 }
 
-@Composable private fun RootBottomBar(current:String?,onGo:(String)->Unit){NavigationBar(containerColor=Color.White,tonalElevation=0.dp){NavigationBarItem(current==R.ME,{onGo(R.ME)},{Icon(Icons.Default.Person,null)},label={Text(flosiText("me"))});NavigationBarItem(current==R.PEOPLE,{onGo(R.PEOPLE)},{Icon(Icons.Default.Person,null)},label={Text(flosiText("people"))});FloatingActionButton({onGo("add")},containerColor=FlosiPurple,contentColor=Color.White,shape=CircleShape,elevation=FloatingActionButtonDefaults.elevation(defaultElevation=5.dp)){Icon(Icons.Default.Add,contentDescription=flosiText("add"))};NavigationBarItem(current==R.ACTIVITY,{onGo(R.ACTIVITY)},{Icon(Icons.Default.ReceiptLong,null)},label={Text(flosiText("activity"))});NavigationBarItem(current==R.TODAY,{onGo(R.TODAY)},{Icon(Icons.Default.Home,null)},label={Text(flosiText("today"))})}}
+@Composable
+private fun RootBottomBar(current:String?,onGo:(String)->Unit){
+    Surface(
+        modifier = Modifier.navigationBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 12.dp,
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            PremiumNavItem(current==R.ME, Icons.Default.Person, flosiText("me")){onGo(R.ME)}
+            PremiumNavItem(current==R.PEOPLE, Icons.Default.Person, flosiText("people")){onGo(R.PEOPLE)}
+            Box(
+                modifier = Modifier.size(58.dp).background(
+                    Brush.linearGradient(listOf(FlosiPurple, FlosiPurpleDeep)),
+                    CircleShape
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick={onGo("add")}) { Icon(Icons.Default.Add, contentDescription=flosiText("add"), tint=Color.White, modifier=Modifier.size(27.dp)) }
+            }
+            PremiumNavItem(current==R.ACTIVITY, Icons.Default.ReceiptLong, flosiText("activity")){onGo(R.ACTIVITY)}
+            PremiumNavItem(current==R.TODAY, Icons.Default.Home, flosiText("today")){onGo(R.TODAY)}
+        }
+    }
+}
+
+@Composable
+private fun PremiumNavItem(selected:Boolean,icon:androidx.compose.ui.graphics.vector.ImageVector,label:String,onClick:()->Unit){
+    val tint = if(selected) FlosiPurple else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        modifier = Modifier.sizeIn(minWidth = 56.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = if(selected) FlosiPurple.copy(alpha = .10f) else Color.Transparent,
+        onClick = onClick,
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+            Icon(icon,null,tint=tint,modifier=Modifier.size(20.dp))
+            Spacer(Modifier.height(3.dp))
+            Text(label,color=tint,style=MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
 private tailrec fun Context.findActivity():Activity?=when(this){is Activity->this;is ContextWrapper->baseContext.findActivity();else->null}
