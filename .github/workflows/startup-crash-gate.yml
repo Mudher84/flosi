@@ -27,21 +27,30 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set +e
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb logcat -c
             adb shell am force-stop com.flosi.app || true
             adb shell monkey -p com.flosi.app -c android.intent.category.LAUNCHER 1
             sleep 8
-            adb shell dumpsys activity activities | grep -q 'com.flosi.app'
-            if adb logcat -d | grep -E 'FATAL EXCEPTION|AndroidRuntime:.*com\.flosi\.app|Process: com\.flosi\.app' ; then
-              adb logcat -d
+            adb shell dumpsys activity activities > flosi-activity.txt 2>&1
+            adb logcat -d > flosi-startup-logcat.txt 2>&1
+            grep -n -E -A 120 -B 20 'FATAL EXCEPTION|AndroidRuntime|Process: com\.flosi\.app' flosi-startup-logcat.txt > flosi-crash.txt || true
+            if grep -q -E 'FATAL EXCEPTION|Process: com\.flosi\.app' flosi-startup-logcat.txt; then
+              echo 'Flosi startup crash detected. See flosi-crash.txt and flosi-startup-logcat.txt.'
               exit 1
             fi
-            adb logcat -d > flosi-startup-logcat.txt
+            if ! grep -q 'com.flosi.app' flosi-activity.txt; then
+              echo 'Flosi process/activity is not present after launch.' > flosi-crash.txt
+              exit 1
+            fi
+            exit 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: flosi-startup-logcat
-          path: flosi-startup-logcat.txt
-          if-no-files-found: ignore
+          name: flosi-startup-evidence
+          path: |
+            flosi-startup-logcat.txt
+            flosi-crash.txt
+            flosi-activity.txt
+          if-no-files-found: warn
