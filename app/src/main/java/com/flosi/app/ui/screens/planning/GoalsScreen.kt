@@ -38,7 +38,15 @@ fun GoalsScreen(onBack:()->Unit,onEdit:()->Unit){
             Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){GoalBadge(if(lang=="ar")"نشط" else "Active",active,FlosiPurple,Modifier.weight(1f));GoalBadge(if(lang=="ar")"مكتمل" else "Done",completed,FlosiGreen,Modifier.weight(1f))}
         }
         SectionTitle(flosiText("goals"),if(lang=="ar")"+ هدف" else "+ Goal",onEdit)
-        if(items.isEmpty())CardBox{Text(if(lang=="ar")"ابدأ أول هدف، حتى لو صغير. Flosi راح يخليك تشوف التقدم قدامك." else "Start your first goal, even a small one. Flosi will make progress visible.",color=MaterialTheme.colorScheme.onSurfaceVariant)}
+        if(items.isEmpty()){
+            EmptyState(
+                title=if(lang=="ar")"ابدأ أول هدف" else "Start your first goal",
+                subtitle=if(lang=="ar")"حدد شي تريد توصله وخلي Flosi يحول الادخار من فكرة إلى تقدم تشوفه كل يوم." else "Pick something you want to reach and let Flosi turn saving into visible progress.",
+                action=if(lang=="ar")"إنشاء هدف" else "Create goal",
+                onAction=onEdit,
+                symbol="◎"
+            )
+        }
         items.forEach{goal->
             val account=goal.accountId?.let(accountMap::get);val currency=account?.currency?.let(CurrencyConverter::normalizeCode)?:baseCurrency;val target=goal.targetAmount.coerceAtLeast(0L);val saved=goal.savedAmount.coerceIn(0L,target);val remaining=(target-saved).coerceAtLeast(0L);val rawProgress=if(target>0L)(saved.toFloat()/target).coerceIn(0f,1f) else 0f;val progress by animateFloatAsState(rawProgress,tween(800),label="goalProgress")
             Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),shape=RoundedCornerShape(28.dp),elevation=CardDefaults.cardElevation(defaultElevation=2.dp)){
