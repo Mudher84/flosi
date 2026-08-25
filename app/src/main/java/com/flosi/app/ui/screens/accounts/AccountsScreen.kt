@@ -1,11 +1,17 @@
 package com.flosi.app.ui.screens.accounts
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.flosi.app.finance.CurrencyConverter
 import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.i18n.flosiText
@@ -18,75 +24,32 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AccountsScreen(onBack:()->Unit,onOpen:(Long)->Unit,onAdd:()->Unit){
- val vm:AccountsViewModel=flosiViewModel();val accounts by vm.accounts.collectAsState()
- val prefs=rememberFlosiPreferences();val settings by prefs.state.collectAsState(initial=FlosiPreferencesState())
- val scope=rememberCoroutineScope();val lang=LocalFlosiLanguage.current
- val base=settings.currency
- val included=accounts.filter{it.includeInTotal}
- val converted=included.map{a->a to CurrencyConverter.convert(a.currentBalance,a.currency,base,settings.exchangeRates)}
- val missing=converted.filter{it.second==null}.map{it.first.currency}.distinct()
- val total=converted.mapNotNull{it.second}.sum()
- val bankAccounts=accounts.filter{it.type.equals("bank",ignoreCase=true)}
- var showBankConnect by remember{mutableStateOf(false)}
-
+ val vm:AccountsViewModel=flosiViewModel();val accounts by vm.accounts.collectAsState();val prefs=rememberFlosiPreferences();val settings by prefs.state.collectAsState(initial=FlosiPreferencesState());val scope=rememberCoroutineScope();val lang=LocalFlosiLanguage.current;val base=settings.currency
+ val included=accounts.filter{it.includeInTotal};val converted=included.map{a->a to CurrencyConverter.convert(a.currentBalance,a.currency,base,settings.exchangeRates)};val missing=converted.filter{it.second==null}.map{it.first.currency}.distinct();val total=converted.mapNotNull{it.second}.sum();val bankAccounts=accounts.filter{it.type.equals("bank",ignoreCase=true)};var showBankConnect by remember{mutableStateOf(false)}
  FlosiPage(flosiText("accounts"),flosiText("accounts_sub"),onBack){
-  CardBox{
-   Metric(flosiText("total_liquidity"),moneyText(total,base),FlosiPurple)
-   if(missing.isNotEmpty()) Text(if(lang=="ar")"غير محتسب: ${missing.joinToString()} — أضف سعر تحويل حتى يدخل بالإجمالي" else "Excluded: ${missing.joinToString()} — add an exchange rate to include it in totals",color=FlosiOrange)
+  PremiumCard{
+   Text(if(lang=="ar")"ثروتك السائلة" else "Liquid wealth",color=Color.White.copy(alpha=.58f),fontSize=11.sp,fontWeight=FontWeight.Medium)
+   Text(moneyText(total,base),color=Color.White,fontSize=31.sp,fontWeight=FontWeight.Black,letterSpacing=(-.5).sp)
+   Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(7.dp).background(FlosiGreen,CircleShape));Spacer(Modifier.width(7.dp));Text(if(lang=="ar")"${included.size} حساب داخل الإجمالي" else "${included.size} accounts included",color=Color.White.copy(alpha=.70f),fontSize=10.sp)}
+   if(missing.isNotEmpty())Text(if(lang=="ar")"غير محتسب: ${missing.joinToString()}" else "Excluded: ${missing.joinToString()}",color=Color(0xFFFFC57A),fontSize=10.sp)
   }
-
   SectionTitle(flosiText("accounts"),flosiText("add_account"),onAdd)
-  CardBox{
-   if(accounts.isEmpty()) Text(flosiText("no_data"),color=FlosiMuted)
-   accounts.forEach{a->ActionRow(a.name,"${a.type} • ${a.currency}",moneyText(a.currentBalance,a.currency),FlosiPurple){onOpen(a.id)}}
+  if(accounts.isEmpty())CardBox{Text(flosiText("no_data"),color=MaterialTheme.colorScheme.onSurfaceVariant)} else accounts.forEachIndexed{index,a->
+   val accent=listOf(FlosiPurple,FlosiBlue,FlosiGreen,FlosiOrange)[index%4]
+   Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),shape=RoundedCornerShape(26.dp),elevation=CardDefaults.cardElevation(defaultElevation=2.dp),onClick={onOpen(a.id)}){
+    Row(Modifier.fillMaxWidth().padding(17.dp),verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(48.dp).background(accent.copy(alpha=.11f),RoundedCornerShape(16.dp)),contentAlignment=Alignment.Center){Text(a.name.take(1).uppercase(),color=accent,fontWeight=FontWeight.Black,fontSize=18.sp)};Spacer(Modifier.width(13.dp));Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text(a.name,color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.ExtraBold,fontSize=15.sp);Text("${a.type} • ${a.currency}",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=10.sp)};Text(moneyText(a.currentBalance,a.currency),color=MaterialTheme.colorScheme.onSurface,fontWeight=FontWeight.Black,fontSize=14.sp)}
+   }
   }
-
   SectionTitle(flosiText("connected_banks"))
   CardBox{
-   Button(onClick={showBankConnect=true},modifier=Modifier.fillMaxWidth()){
-    Text(if(lang=="ar")"ربط حساب مصرفي" else "Connect bank account")
-   }
-   Metric(flosiText("bank_sync"),if(settings.bankSyncEnabled)flosiText("enabled") else flosiText("disabled"),if(settings.bankSyncEnabled)FlosiGreen else FlosiOrange)
-   BankOptionRow(flosiText("auto_transactions"),settings.bankSyncEnabled,bankAccounts.isNotEmpty()){
-    scope.launch{prefs.setBankSyncEnabled(it)}
-   }
-   BankOptionRow(flosiText("salary_auto"),settings.salaryAutoAdd,settings.bankSyncEnabled&&bankAccounts.isNotEmpty()){
-    scope.launch{prefs.setSalaryAutoAdd(it)}
-   }
-   BankOptionRow(flosiText("review_before_add"),settings.bankReviewBeforeAdd,settings.bankSyncEnabled&&bankAccounts.isNotEmpty()){
-    scope.launch{prefs.setBankReviewBeforeAdd(it)}
-   }
-   Text(
-    if(bankAccounts.isEmpty()) {
-     if(lang=="ar") "أضف حساباً من نوع مصرف لتظهر خيارات الربط عند توفر API رسمي للمصرف." else "Add a bank-type account. Connection options become active when an official bank API is available."
-    } else flosiText("bank_sync_sub"),
-    color=FlosiMuted
-   )
-   Text(
-    if(lang=="ar") "لا ينشئ Flosi أي دخل قبل وصول حركة مصرفية مؤكدة. معرّف الحركة يمنع التكرار، والراتب يُصنف فقط بعد المطابقة." else "Flosi never creates income before a confirmed bank transaction arrives. Transaction IDs prevent duplicates and salary is classified only after matching.",
-    color=FlosiPurple
-   )
+   Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(44.dp).background(FlosiPurpleSoft,RoundedCornerShape(14.dp)),contentAlignment=Alignment.Center){Text("⌁",color=FlosiPurple,fontSize=21.sp,fontWeight=FontWeight.Black)};Spacer(Modifier.width(12.dp));Column(Modifier.weight(1f)){Text(if(lang=="ar")"الربط المصرفي" else "Bank connection",fontWeight=FontWeight.ExtraBold);Text(if(lang=="ar")"مزامنة آمنة عند توفر API رسمي" else "Secure sync when an official API is available",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=10.sp)}}
+   Button(onClick={showBankConnect=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(16.dp)){Text(if(lang=="ar")"ربط حساب مصرفي" else "Connect bank account")}
+   BankOptionRow(flosiText("auto_transactions"),settings.bankSyncEnabled,bankAccounts.isNotEmpty()){scope.launch{prefs.setBankSyncEnabled(it)}}
+   BankOptionRow(flosiText("salary_auto"),settings.salaryAutoAdd,settings.bankSyncEnabled&&bankAccounts.isNotEmpty()){scope.launch{prefs.setSalaryAutoAdd(it)}}
+   BankOptionRow(flosiText("review_before_add"),settings.bankReviewBeforeAdd,settings.bankSyncEnabled&&bankAccounts.isNotEmpty()){scope.launch{prefs.setBankReviewBeforeAdd(it)}}
+   Text(if(lang=="ar")"Flosi ما يطلب ولا يخزن كلمة مرور حسابك المصرفي." else "Flosi never asks for or stores your bank password.",color=FlosiGreen,fontSize=10.sp,fontWeight=FontWeight.SemiBold)
   }
  }
-
- if(showBankConnect){
-  AlertDialog(
-   onDismissRequest={showBankConnect=false},
-   title={Text(if(lang=="ar")"ربط المصرف" else "Connect bank")},
-   text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
-    Text(if(lang=="ar")"الربط الحي يتم فقط عبر API / OAuth رسمي من المصرف أو مزود Open Banking معتمد. Flosi لا يطلب ولا يخزن كلمة مرور حسابك المصرفي." else "Live connection is available only through an official bank API/OAuth or an approved Open Banking provider. Flosi never asks for or stores your bank password.")
-    Text(if(lang=="ar")"مصارف مقترحة: الرافدين، الرشيد، TBI، أو مصرف آخر." else "Suggested banks: Rafidain, Rasheed, TBI, or another bank.",color=FlosiMuted)
-    Text(if(lang=="ar")"بعد تفعيل قناة رسمية، سيقرأ Flosi الحركات الجديدة فقط، يمنع التكرار، ويستطيع إضافة الراتب تلقائياً حسب اختيارك." else "Once an official connection is configured, Flosi imports only new transactions, prevents duplicates, and can add salary automatically if you enable it.",color=FlosiPurple)
-   }},
-   confirmButton={TextButton(onClick={showBankConnect=false}){Text(if(lang=="ar")"حسناً" else "OK")}}
-  )
- }
+ if(showBankConnect)AlertDialog(onDismissRequest={showBankConnect=false},title={Text(if(lang=="ar")"ربط المصرف" else "Connect bank")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text(if(lang=="ar")"الربط الحي يتم فقط عبر API / OAuth رسمي من المصرف أو مزود Open Banking معتمد. Flosi لا يطلب ولا يخزن كلمة مرور حسابك المصرفي." else "Live connection is available only through an official bank API/OAuth or an approved Open Banking provider. Flosi never asks for or stores your bank password.");Text(if(lang=="ar")"بعد تفعيل قناة رسمية، يقرأ Flosi الحركات الجديدة فقط ويمنع التكرار." else "Once an official connection is configured, Flosi imports only new transactions and prevents duplicates.",color=FlosiPurple)}},confirmButton={TextButton(onClick={showBankConnect=false}){Text(if(lang=="ar")"حسناً" else "OK")}})
 }
-
-@Composable
-private fun BankOptionRow(title:String,checked:Boolean,enabled:Boolean,onChange:(Boolean)->Unit){
- Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-  Text(title,modifier=Modifier.weight(1f),color=if(enabled)FlosiText else FlosiMuted)
-  Switch(checked=checked,onCheckedChange=onChange,enabled=enabled)
- }
-}
+@Composable private fun BankOptionRow(title:String,checked:Boolean,enabled:Boolean,onChange:(Boolean)->Unit){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(title,modifier=Modifier.weight(1f),color=if(enabled)MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp,fontWeight=FontWeight.SemiBold);Switch(checked=checked,onCheckedChange=onChange,enabled=enabled)}}
