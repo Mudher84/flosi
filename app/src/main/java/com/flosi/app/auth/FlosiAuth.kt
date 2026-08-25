@@ -22,7 +22,7 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import com.flosi.app.BuildConfig
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -65,10 +65,7 @@ private object CloudAuth {
         user?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
 
     suspend fun google(context: Context): FirebaseUser {
-        val option = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID)
-            .setAutoSelectEnabled(false)
+        val option = GetSignInWithGoogleOption.Builder(BuildConfig.FLOSI_GOOGLE_WEB_CLIENT_ID)
             .build()
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
         val credential = CredentialManager.create(context).getCredential(context, request).credential
@@ -214,8 +211,17 @@ private fun Login(
                     error = null
                     try {
                         onGoogle(CloudAuth.google(context))
-                    } catch (_: GetCredentialException) {
-                        error = "تم إلغاء Google أو تعذر إكماله."
+                    } catch (e: GetCredentialException) {
+                        val detail = e.message?.trim().orEmpty()
+                        error = buildString {
+                            append("تعذر تسجيل الدخول عبر Google")
+                            append("\nالنوع: ")
+                            append(e.type)
+                            if (detail.isNotBlank()) {
+                                append("\nالتفاصيل: ")
+                                append(detail)
+                            }
+                        }
                     } catch (t: Throwable) {
                         error = t.message ?: "تعذر تسجيل الدخول عبر Google"
                     } finally {
