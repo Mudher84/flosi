@@ -13,9 +13,9 @@ import com.flosi.app.data.local.entity.*
     entities = [
         AccountEntity::class, PersonEntity::class, CategoryEntity::class, TransactionEntity::class,
         CommitmentEntity::class, BudgetEntity::class, GoalEntity::class,
-        InvoiceEntity::class, InvoiceItemEntity::class
+        InvoiceEntity::class, InvoiceItemEntity::class, SalaryEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class FlosiDatabase : RoomDatabase() {
@@ -27,6 +27,7 @@ abstract class FlosiDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
     abstract fun goalDao(): GoalDao
     abstract fun invoiceDao(): InvoiceDao
+    abstract fun salaryDao(): SalaryDao
 
     companion object {
         @Volatile private var instance: FlosiDatabase? = null
@@ -58,6 +59,26 @@ abstract class FlosiDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS salary_profiles (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        amount INTEGER NOT NULL,
+                        currency TEXT NOT NULL,
+                        frequency TEXT NOT NULL,
+                        payday INTEGER NOT NULL,
+                        nextPayAt INTEGER NOT NULL,
+                        active INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_salary_profiles_active ON salary_profiles(active)")
+            }
+        }
+
         fun get(context: Context): FlosiDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -65,7 +86,7 @@ abstract class FlosiDatabase : RoomDatabase() {
                     FlosiDatabase::class.java,
                     "flosi.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { instance = it }
