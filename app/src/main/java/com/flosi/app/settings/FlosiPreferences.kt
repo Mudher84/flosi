@@ -20,6 +20,8 @@ data class FlosiPreferencesState(
     val currency: String = "USD",
     val language: String = "ar",
     val themeMode: String = "system",
+    val onboardingCompleted: Boolean = false,
+    val expectedMonthlyIncome: Long = 0L,
     val biometricLock: Boolean = false,
     val hideRecents: Boolean = false,
     val dailySummaryEnabled: Boolean = true,
@@ -35,6 +37,8 @@ class FlosiPreferences(private val context: Context) {
         val currency = stringPreferencesKey("currency")
         val language = stringPreferencesKey("language")
         val themeMode = stringPreferencesKey("theme_mode")
+        val onboardingCompleted = booleanPreferencesKey("onboarding_completed")
+        val expectedMonthlyIncome = longPreferencesKey("expected_monthly_income")
         val biometric = booleanPreferencesKey("biometric_lock")
         val hideRecents = booleanPreferencesKey("hide_recents")
         val dailySummary = booleanPreferencesKey("daily_summary")
@@ -58,6 +62,8 @@ class FlosiPreferences(private val context: Context) {
             currency=validCurrency(p[Keys.currency] ?: fallbackCurrency),
             language=if(FlosiLocales.isSupported(rawLanguage)) rawLanguage else "ar",
             themeMode=rawTheme.takeIf{it in setOf("system","light","dark")} ?: "system",
+            onboardingCompleted=p[Keys.onboardingCompleted] ?: false,
+            expectedMonthlyIncome=(p[Keys.expectedMonthlyIncome] ?: 0L).coerceAtLeast(0L),
             biometricLock=p[Keys.biometric] ?: false,
             hideRecents=p[Keys.hideRecents] ?: false,
             dailySummaryEnabled=p[Keys.dailySummary] ?: true,
@@ -76,6 +82,8 @@ class FlosiPreferences(private val context: Context) {
     }
     suspend fun setLanguage(v:String){require(FlosiLocales.isSupported(v)){"Unsupported locale: $v"};context.flosiDataStore.edit{it[Keys.language]=v}}
     suspend fun setThemeMode(v:String){require(v in setOf("system","light","dark"));context.flosiDataStore.edit{it[Keys.themeMode]=v}}
+    suspend fun setOnboardingCompleted(v:Boolean)=context.flosiDataStore.edit{it[Keys.onboardingCompleted]=v}
+    suspend fun setExpectedMonthlyIncome(v:Long)=context.flosiDataStore.edit{it[Keys.expectedMonthlyIncome]=v.coerceAtLeast(0L)}
     suspend fun setBiometric(v:Boolean)=context.flosiDataStore.edit{it[Keys.biometric]=v}
     suspend fun setHideRecents(v:Boolean)=context.flosiDataStore.edit{it[Keys.hideRecents]=v}
     suspend fun setDailySummary(v:Boolean)=context.flosiDataStore.edit{it[Keys.dailySummary]=v}
