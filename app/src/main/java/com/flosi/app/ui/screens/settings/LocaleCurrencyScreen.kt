@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
 import com.flosi.app.i18n.flosiText
 import com.flosi.app.settings.FlosiPreferencesState
