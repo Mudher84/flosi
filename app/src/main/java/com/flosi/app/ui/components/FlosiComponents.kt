@@ -1,5 +1,10 @@
 package com.flosi.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,12 +14,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,21 +48,13 @@ val FlosiBlue = Color(0xFF4D9BFF)
 val FlosiDark = Color(0xFF15121C)
 val FlosiGold = Color(0xFFE7B65B)
 
-val FlosiHeroBrush = Brush.linearGradient(
-    listOf(Color(0xFF9A7BFF), Color(0xFF7252F3), Color(0xFF4F34C8))
-)
-
-val FlosiPremiumBrush = Brush.linearGradient(
-    listOf(Color(0xFF17121F), Color(0xFF241A35), Color(0xFF3A285B))
-)
+val FlosiHeroBrush = Brush.linearGradient(listOf(Color(0xFF9A7BFF), Color(0xFF7252F3), Color(0xFF4F34C8)))
+val FlosiPremiumBrush = Brush.linearGradient(listOf(Color(0xFF17121F), Color(0xFF241A35), Color(0xFF3A285B)))
 
 @Composable
 fun FlosiPage(title: String, subtitle: String = "", onBack: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
                 if (subtitle.isNotBlank()) {
                     Text(localizedLegacyText(subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -63,18 +63,15 @@ fun FlosiPage(title: String, subtitle: String = "", onBack: (() -> Unit)? = null
                 Text(localizedLegacyText(title), color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.ExtraBold, fontSize = 25.sp)
             }
             if (onBack != null) {
+                val haptic = LocalHapticFeedback.current
                 Spacer(Modifier.width(12.dp))
                 Surface(
-                    modifier = Modifier.size(44.dp).clickable(onClick = onBack),
+                    modifier = Modifier.size(44.dp).clickable { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onBack() },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 3.dp,
                     tonalElevation = 1.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, localizedLegacyText("رجوع"), tint = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
+                ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.ArrowBack, localizedLegacyText("رجوع"), tint = MaterialTheme.colorScheme.onSurface) } }
             }
         }
         Column(
@@ -87,17 +84,8 @@ fun FlosiPage(title: String, subtitle: String = "", onBack: (() -> Unit)? = null
 
 @Composable
 fun CardBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(28.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 17.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            content = content
-        )
+    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(28.dp), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 17.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
     }
 }
 
@@ -122,14 +110,10 @@ fun Metric(label: String, value: String, tone: Color = MaterialTheme.colorScheme
 
 @Composable
 fun ActionRow(title: String, subtitle: String = "", value: String? = null, accent: Color = FlosiPurple, onClick: (() -> Unit)? = null) {
-    val rowModifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp) else Modifier.fillMaxWidth().padding(vertical = 9.dp)
-    Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier.size(42.dp).background(accent.copy(alpha = .10f), RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(Modifier.size(10.dp).background(accent, CircleShape))
-        }
+    val haptic = LocalHapticFeedback.current
+    val click = if (onClick != null) Modifier.clickable { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onClick() } else Modifier
+    Row(modifier = Modifier.fillMaxWidth().then(click).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(42.dp).background(accent.copy(alpha = .10f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Box(Modifier.size(10.dp).background(accent, CircleShape)) }
         Spacer(Modifier.width(13.dp))
         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
             Text(localizedLegacyText(title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
@@ -141,11 +125,28 @@ fun ActionRow(title: String, subtitle: String = "", value: String? = null, accen
 
 @Composable
 fun SectionTitle(title: String, action: String? = null, onAction: () -> Unit = {}) {
+    val haptic = LocalHapticFeedback.current
     Row(modifier = Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(localizedLegacyText(title), modifier = Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground)
         if (action != null) {
-            Surface(shape = RoundedCornerShape(50), color = FlosiPurpleSoft, modifier = Modifier.clickable(onClick = onAction)) {
+            Surface(shape = RoundedCornerShape(50), color = FlosiPurpleSoft, modifier = Modifier.clickable { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onAction() }) {
                 Text(localizedLegacyText(action), color = FlosiPurpleDeep, modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyState(title: String, subtitle: String = "", action: String? = null, onAction: (() -> Unit)? = null) {
+    AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn(initialScale = .96f), exit = fadeOut() + scaleOut(targetScale = .96f)) {
+        CardBox {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(58.dp).background(FlosiPurpleSoft, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.Inbox, null, tint = FlosiPurple, modifier = Modifier.size(26.dp)) }
+                    Text(localizedLegacyText(title), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+                    if (subtitle.isNotBlank()) Text(localizedLegacyText(subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    if (action != null && onAction != null) Button(onClick = onAction, shape = RoundedCornerShape(16.dp)) { Text(localizedLegacyText(action)) }
+                }
             }
         }
     }
