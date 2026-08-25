@@ -22,6 +22,9 @@ val flosiGoogleWebClientId = providers.gradleProperty("FLOSI_GOOGLE_WEB_CLIENT_I
 val flosiSubscriptionProductId = providers.gradleProperty("FLOSI_SUBSCRIPTION_PRODUCT_ID")
     .orElse("flosi_monthly")
     .get()
+val flosiBackendBaseUrl = providers.gradleProperty("FLOSI_BACKEND_BASE_URL")
+    .orElse("")
+    .get()
 
 val flosiStoreFile = System.getenv("FLOSI_STORE_FILE")
 val flosiStorePassword = System.getenv("FLOSI_KEYSTORE_PASSWORD")
@@ -52,6 +55,7 @@ android {
         buildConfigField("String", "FLOSI_FIREBASE_PROJECT_ID", flosiFirebaseProjectId.asBuildConfigString())
         buildConfigField("String", "FLOSI_GOOGLE_WEB_CLIENT_ID", flosiGoogleWebClientId.asBuildConfigString())
         buildConfigField("String", "FLOSI_SUBSCRIPTION_PRODUCT_ID", flosiSubscriptionProductId.asBuildConfigString())
+        buildConfigField("String", "FLOSI_BACKEND_BASE_URL", flosiBackendBaseUrl.asBuildConfigString())
     }
 
     signingConfigs {
