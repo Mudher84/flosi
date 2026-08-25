@@ -62,25 +62,34 @@ fun PeopleScreen(onOpenPerson:(Long)->Unit,onAddPerson:()->Unit){
         }
 
         SectionTitle(s("الحسابات الشخصية","Personal ledgers"),s("+ شخص","+ Person"),onAddPerson)
-        CardBox{
-            if(people.isEmpty())Text(s("أضف أول شخص وابدأ تسجيل السلف والديون","Add your first person to start tracking debts"),color=FlosiMuted)
-            people.sortedWith(compareByDescending<com.flosi.app.data.local.entity.PersonEntity>{kotlin.math.abs(it.currentBalance)}.thenBy{it.name}).forEach{p->
-                val value=when{
-                    p.currentBalance>0 -> s("لك ${moneyText(p.currentBalance,p.currency)}","Owed to you ${moneyText(p.currentBalance,p.currency)}")
-                    p.currentBalance<0 -> s("عليك ${moneyText(kotlin.math.abs(p.currentBalance),p.currency)}","You owe ${moneyText(kotlin.math.abs(p.currentBalance),p.currency)}")
-                    else -> s("الحساب مصفّى","Settled")
+        if(people.isEmpty()){
+            EmptyState(
+                title=s("بعد ما ضفت أحد","No people yet"),
+                subtitle=s("أضف شخص حتى تسجل السلف والديون والتسديدات ويصير عندك كشف واضح لكل واحد.","Add a person to track loans, debts, repayments, and a clear statement for each one."),
+                action=s("إضافة أول شخص","Add first person"),
+                onAction=onAddPerson,
+                symbol="◎"
+            )
+        } else {
+            CardBox{
+                people.sortedWith(compareByDescending<com.flosi.app.data.local.entity.PersonEntity>{kotlin.math.abs(it.currentBalance)}.thenBy{it.name}).forEach{p->
+                    val value=when{
+                        p.currentBalance>0 -> s("لك ${moneyText(p.currentBalance,p.currency)}","Owed to you ${moneyText(p.currentBalance,p.currency)}")
+                        p.currentBalance<0 -> s("عليك ${moneyText(kotlin.math.abs(p.currentBalance),p.currency)}","You owe ${moneyText(kotlin.math.abs(p.currentBalance),p.currency)}")
+                        else -> s("الحساب مصفّى","Settled")
+                    }
+                    val color=when{
+                        p.currentBalance>0 -> FlosiGreen
+                        p.currentBalance<0 -> FlosiRed
+                        else -> FlosiMuted
+                    }
+                    ActionRow(
+                        p.name,
+                        listOf(p.phone,p.currency).filter{it.isNotBlank()}.joinToString(" • "),
+                        value,
+                        color
+                    ){onOpenPerson(p.id)}
                 }
-                val color=when{
-                    p.currentBalance>0 -> FlosiGreen
-                    p.currentBalance<0 -> FlosiRed
-                    else -> FlosiMuted
-                }
-                ActionRow(
-                    p.name,
-                    listOf(p.phone,p.currency).filter{it.isNotBlank()}.joinToString(" • "),
-                    value,
-                    color
-                ){onOpenPerson(p.id)}
             }
         }
 
