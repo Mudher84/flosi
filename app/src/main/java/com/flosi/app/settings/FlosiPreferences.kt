@@ -19,6 +19,7 @@ private fun deviceDefaultCurrency():String = runCatching {
 data class FlosiPreferencesState(
     val currency: String = "USD",
     val language: String = "ar",
+    val themeMode: String = "system",
     val biometricLock: Boolean = false,
     val hideRecents: Boolean = false,
     val dailySummaryEnabled: Boolean = true,
@@ -33,8 +34,9 @@ class FlosiPreferences(private val context: Context) {
     private object Keys {
         val currency = stringPreferencesKey("currency")
         val language = stringPreferencesKey("language")
-        val biometric = booleanPreferencesKey("biometric_lock") // legacy compatibility only
-        val hideRecents = booleanPreferencesKey("hide_recents") // legacy compatibility only
+        val themeMode = stringPreferencesKey("theme_mode")
+        val biometric = booleanPreferencesKey("biometric_lock")
+        val hideRecents = booleanPreferencesKey("hide_recents")
         val dailySummary = booleanPreferencesKey("daily_summary")
         val backup = booleanPreferencesKey("backup_enabled")
         val exchangeRates = stringSetPreferencesKey("exchange_rates")
@@ -50,10 +52,12 @@ class FlosiPreferences(private val context: Context) {
 
     val state: Flow<FlosiPreferencesState> = context.flosiDataStore.data.map { p ->
         val rawLanguage = p[Keys.language] ?: "ar"
+        val rawTheme = p[Keys.themeMode] ?: "system"
         val fallbackCurrency=deviceDefaultCurrency()
         FlosiPreferencesState(
             currency=validCurrency(p[Keys.currency] ?: fallbackCurrency),
             language=if(FlosiLocales.isSupported(rawLanguage)) rawLanguage else "ar",
+            themeMode=rawTheme.takeIf{it in setOf("system","light","dark")} ?: "system",
             biometricLock=p[Keys.biometric] ?: false,
             hideRecents=p[Keys.hideRecents] ?: false,
             dailySummaryEnabled=p[Keys.dailySummary] ?: true,
@@ -71,6 +75,7 @@ class FlosiPreferences(private val context: Context) {
         context.flosiDataStore.edit{it[Keys.currency]=code}
     }
     suspend fun setLanguage(v:String){require(FlosiLocales.isSupported(v)){"Unsupported locale: $v"};context.flosiDataStore.edit{it[Keys.language]=v}}
+    suspend fun setThemeMode(v:String){require(v in setOf("system","light","dark"));context.flosiDataStore.edit{it[Keys.themeMode]=v}}
     suspend fun setBiometric(v:Boolean)=context.flosiDataStore.edit{it[Keys.biometric]=v}
     suspend fun setHideRecents(v:Boolean)=context.flosiDataStore.edit{it[Keys.hideRecents]=v}
     suspend fun setDailySummary(v:Boolean)=context.flosiDataStore.edit{it[Keys.dailySummary]=v}
