@@ -20,22 +20,46 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.flosi.app.finance.CurrencyConverter
 import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.i18n.localizedLegacyText
 import com.flosi.app.ui.components.*
 import com.flosi.app.ui.viewmodel.HomeViewModel
+import com.flosi.app.ui.viewmodel.PlanningViewModel
 import com.flosi.app.ui.viewmodel.flosiViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.max
 
 @Composable
-fun TodayScreen(onActivity: () -> Unit,onNotifications: () -> Unit) {
+fun TodayScreen(onActivity: () -> Unit,onNotifications: () -> Unit,onCommitments: () -> Unit) {
     val vm: HomeViewModel = flosiViewModel()
+    val planningVm: PlanningViewModel = flosiViewModel()
     val state by vm.state.collectAsState()
+    val commitments by planningVm.commitments.collectAsState()
+    val accounts by planningVm.accounts.collectAsState()
+    val prefs by planningVm.preferences.collectAsState()
     val currency=state.dashboard.baseCurrency
     val netMonth = state.dashboard.monthIncome - state.dashboard.monthExpense
     val reservedTotal = state.reservedCommitments + state.reservedGoals
     val safeToSpend = max(0L, state.dashboard.totalBalance - reservedTotal)
     val language=LocalFlosiLanguage.current
+    val now=System.currentTimeMillis()
+    val weekEnd=now+7L*86_400_000L
+    val accountMap=remember(accounts){accounts.associateBy{it.id}}
+    fun convertedAmount(amount:Long,accountId:Long?):Long? {
+        val source=accountId?.let(accountMap::get)?.currency ?: currency
+        return CurrencyConverter.convert(amount,source,currency,prefs.exchangeRates)
+    }
+    val overdue=commitments.filter{it.dueAt<now}.sortedBy{it.dueAt}
+    val upcoming=commitments.filter{it.dueAt>=now&&it.dueAt<=weekEnd}.sortedBy{it.dueAt}
+    val overdueTotal=overdue.mapNotNull{convertedAmount(it.amount,it.accountId)}.fold(0L){a,b->runCatching{Math.addExact(a,b)}.getOrElse{Long.MAX_VALUE}}
+    val upcomingTotal=upcoming.mapNotNull{convertedAmount(it.amount,it.accountId)}.fold(0L){a,b->runCatching{Math.addExact(a,b)}.getOrElse{Long.MAX_VALUE}}
+    val calendar=Calendar.getInstance()
+    val remainingDays=(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)-calendar.get(Calendar.DAY_OF_MONTH)+1).coerceAtLeast(1)
+    val safeDaily=safeToSpend/remainingDays
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(FlosiBg).statusBarsPadding(),
@@ -72,6 +96,8 @@ fun TodayScreen(onActivity: () -> Unit,onNotifications: () -> Unit) {
             }
         }
         item { SafeSpendCard(safeToSpend,state.reservedCommitments,state.reservedGoals,currency,language) }
+        item { DailyAllowanceCard(safeDaily,remainingDays,currency,language) }
+        item { DueSoonCard(overdue,upcoming,overdueTotal,upcomingTotal,currency,language,onCommitments) }
         item { SmartInsightCard(state.dashboard.monthIncome, state.dashboard.monthExpense,language) }
         item { SectionTitle(localizedLegacyText("آخر الحركات"), localizedLegacyText("عرض الكل"), onActivity) }
         item {
@@ -174,6 +200,46 @@ private fun BalanceHero(totalBalance:Long,monthIncome:Long,monthExpense:Long,net
                 )
             }
             Surface(color=FlosiPurpleSoft,shape=CircleShape,modifier=Modifier.size(48.dp)){Box(contentAlignment=Alignment.Center){Text("◎",color=FlosiPurple,fontSize=22.sp,fontWeight=FontWeight.Bold)}}
+        }
+    }
+}
+
+@Composable private fun DailyAllowanceCard(value:Long,days:Int,currency:String,language:String){
+    Surface(color=Color(0xFFF1ECFF),shape=RoundedCornerShape(22.dp),modifier=Modifier.fillMaxWidth()){
+        Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically){
+            Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){
+                Text(if(language=="ar")"تقدر تصرف اليوم" else "Safe to spend today",color=FlosiPurple,fontSize=11.sp,fontWeight=FontWeight.SemiBold)
+                Text(moneyText(value,currency),color=FlosiText,fontSize=22.sp,fontWeight=FontWeight.Bold)
+                Text(if(language=="ar")"مقسمة على $days يوم متبقي من الشهر" else "Based on $days remaining days this month",color=FlosiMuted,fontSize=10.sp)
+            }
+            Text("◷",color=FlosiPurple,fontSize=25.sp,fontWeight=FontWeight.Bold)
+        }
+    }
+}
+
+@Composable private fun DueSoonCard(
+    overdue:List<com.flosi.app.data.local.entity.CommitmentEntity>,
+    upcoming:List<com.flosi.app.data.local.entity.CommitmentEntity>,
+    overdueTotal:Long,
+    upcomingTotal:Long,
+    currency:String,
+    language:String,
+    onOpen:()->Unit
+){
+    val fmt=remember(language){SimpleDateFormat(if(language=="ar")"dd/MM" else "MMM d",Locale.getDefault())}
+    Card(modifier=Modifier.fillMaxWidth().clickable(onClick=onOpen),colors=CardDefaults.cardColors(containerColor=Color.White),shape=RoundedCornerShape(24.dp),elevation=CardDefaults.cardElevation(defaultElevation=1.dp)){
+        Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                Text(if(language=="ar")"الاستحقاقات القريبة" else "Upcoming dues",style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
+                Text(if(language=="ar")"عرض الكل" else "View all",color=FlosiPurple,fontSize=11.sp)
+            }
+            if(overdue.isEmpty()&&upcoming.isEmpty()) Text(if(language=="ar")"ما عندك استحقاقات خلال 7 أيام" else "No dues in the next 7 days",color=FlosiGreen,fontSize=11.sp)
+            if(overdue.isNotEmpty()) ActionRow(if(language=="ar")"متأخر (${overdue.size})" else "Overdue (${overdue.size})","",moneyText(overdueTotal,currency),FlosiRed)
+            if(upcoming.isNotEmpty()) ActionRow(if(language=="ar")"خلال 7 أيام (${upcoming.size})" else "Next 7 days (${upcoming.size})","",moneyText(upcomingTotal,currency),FlosiOrange)
+            (overdue+upcoming).sortedBy{it.dueAt}.take(3).forEach{item->
+                HorizontalDivider(color=FlosiLine)
+                ActionRow(item.title,if(language=="ar")"استحقاق ${fmt.format(Date(item.dueAt))}" else "Due ${fmt.format(Date(item.dueAt))}",moneyText(item.amount,currency),if(item.dueAt<System.currentTimeMillis())FlosiRed else FlosiOrange)
+            }
         }
     }
 }
