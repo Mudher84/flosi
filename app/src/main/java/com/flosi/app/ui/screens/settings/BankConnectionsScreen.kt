@@ -24,13 +24,13 @@ fun BankConnectionsScreen(onBack: () -> Unit) {
             SectionTitle("المحافظ الإلكترونية")
             ActionRow(
                 "ZainCash",
-                "جاهز للربط الرسمي عبر بوابة Flosi الآمنة",
-                "ربط",
+                "بوابة الدفع الرسمية جاهزة من جهة Flosi Backend",
+                "التفاصيل",
                 FlosiPurple,
                 onClick = { showZainCashInfo = true }
             )
             Text(
-                "Flosi لا يخزن كلمة مرور ZainCash أو أسرار التاجر داخل الهاتف. الربط الإنتاجي يتم عبر خادم آمن بعد تفعيل بيانات التاجر الرسمية.",
+                "واجهة ZainCash العامة الحالية هي بوابة دفع، وليست API لقراءة رصيد وحركات محفظة المستخدم. Flosi لن يدّعي مزامنة الرصيد إلا إذا وفرت ZainCash API رسمية منفصلة لذلك.",
                 color = FlosiMuted
             )
         }
@@ -56,18 +56,19 @@ fun BankConnectionsScreen(onBack: () -> Unit) {
             Text("• لا نخزن بيانات الدخول المصرفية داخل Flosi.", color = FlosiMuted)
             Text("• لا نستخدم WebView لالتقاط اسم المستخدم أو كلمة المرور.", color = FlosiMuted)
             Text("• كل ربط حقيقي يجب أن يكون عبر OAuth/API رسمي أو مزود Open Banking معتمد.", color = FlosiMuted)
-            Text("• يمكن فصل أي اتصال بدون حذف السجل المالي المحلي.", color = FlosiMuted)
+            Text("• أسرار ZainCash وGoogle Play تبقى على الخادم فقط ولا تدخل داخل APK.", color = FlosiMuted)
         }
     }
 
     if (showZainCashInfo) {
         AlertDialog(
             onDismissRequest = { showZainCashInfo = false },
-            title = { Text("ربط ZainCash") },
+            title = { Text("ZainCash") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("الطبقة داخل Flosi جاهزة كبوابة اتصال، لكن تفعيل الإنتاج يحتاج حساب ZainCash Business/Merchant وبيانات API الرسمية.")
-                    Text("أسرار client_secret وAPI key يجب أن تبقى على خادم Flosi ولا تُضمَّن داخل APK.", color = FlosiMuted)
+                    Text("تم تجهيز Flosi Backend لـ ZainCash Payment Gateway v2: OAuth2، إنشاء الدفع، الاستعلام، والتحقق من الـcallback والـwebhook.")
+                    Text("التشغيل الإنتاجي يحتاج حساب ZainCash Business/Merchant وclient_id وclient_secret وAPI key وserviceType من ZainCash.")
+                    Text("هذه البوابة لا تمنح Flosi صلاحية قراءة رصيد أو حركات محفظة المستخدم.", color = FlosiMuted)
                 }
             },
             confirmButton = {
