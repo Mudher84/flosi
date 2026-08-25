@@ -15,6 +15,7 @@ import androidx.fragment.app.FragmentActivity
 import com.flosi.app.auth.FlosiAuthGate
 import com.flosi.app.i18n.FlosiLocales
 import com.flosi.app.i18n.LocalFlosiLanguage
+import com.flosi.app.onboarding.FlosiOnboardingGate
 import com.flosi.app.settings.FlosiPreferencesState
 import com.flosi.app.subscription.FlosiSubscriptionGate
 import com.flosi.app.ui.navigation.FlosiApp
@@ -39,13 +40,11 @@ class MainActivity : FragmentActivity() {
             CompositionLocalProvider(LocalFlosiLanguage provides prefs.language) {
                 FlosiTheme(darkTheme = dark, layoutDirection = locale.layoutDirection) {
                     FlosiAuthGate {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .statusBarsPadding()
-                        ) {
-                            FlosiSubscriptionGate {
-                                FlosiApp()
+                        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                            FlosiOnboardingGate {
+                                FlosiSubscriptionGate {
+                                    FlosiApp()
+                                }
                             }
                         }
                     }
