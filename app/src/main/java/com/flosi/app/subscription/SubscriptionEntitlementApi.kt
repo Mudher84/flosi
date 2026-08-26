@@ -14,9 +14,12 @@ import java.security.MessageDigest
 
 internal data class ServerEntitlement(
     val active: Boolean,
+    val role: String,
     val trialEndsAt: Long?,
     val serverNow: Long
-)
+) {
+    val isOwner: Boolean get() = role.equals("OWNER", ignoreCase = true)
+}
 
 internal object SubscriptionEntitlementApi {
     fun configured(): Boolean = BuildConfig.FLOSI_BACKEND_BASE_URL.isNotBlank()
@@ -44,6 +47,7 @@ internal object SubscriptionEntitlementApi {
                 val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
                 ServerEntitlement(
                     active = json.optBoolean("active", false),
+                    role = json.optString("role", if (json.optBoolean("active", false)) "PREMIUM" else "USER"),
                     trialEndsAt = if (json.has("trialEndsAt") && !json.isNull("trialEndsAt")) json.getLong("trialEndsAt") else null,
                     serverNow = json.optLong("serverNow", System.currentTimeMillis())
                 )
