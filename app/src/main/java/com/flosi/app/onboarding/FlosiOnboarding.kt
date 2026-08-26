@@ -23,7 +23,7 @@ import com.flosi.app.ui.viewmodel.rememberFlosiPreferences
 import kotlinx.coroutines.launch
 
 @Composable
-fun FlosiOnboardingGate(content:@Composable()->Unit){
+fun FlosiOnboardingGate(content: @Composable () -> Unit){
     val prefs=rememberFlosiPreferences()
     val state by prefs.state.collectAsState(initial=FlosiPreferencesState())
     if(state.onboardingCompleted) content() else FlosiOnboardingScreen()
