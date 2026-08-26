@@ -45,12 +45,15 @@ internal object SubscriptionEntitlementApi {
                 conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 if (conn.responseCode !in 200..299) return@runCatching null
                 val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-                ServerEntitlement(
+                val entitlement = ServerEntitlement(
                     active = json.optBoolean("active", false),
                     role = json.optString("role", if (json.optBoolean("active", false)) "PREMIUM" else "USER"),
                     trialEndsAt = if (json.has("trialEndsAt") && !json.isNull("trialEndsAt")) json.getLong("trialEndsAt") else null,
                     serverNow = json.optLong("serverNow", System.currentTimeMillis())
                 )
+                context.getSharedPreferences("flosi_subscription", Context.MODE_PRIVATE)
+                    .edit().putString("server_role", entitlement.role.uppercase()).apply()
+                entitlement
             }.getOrNull().also { conn.disconnect() }
         }
     }
