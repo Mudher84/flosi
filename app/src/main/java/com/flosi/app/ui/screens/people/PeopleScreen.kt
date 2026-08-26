@@ -6,100 +6,33 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flosi.app.finance.CurrencyConverter
+import com.flosi.app.i18n.FlosiPeopleCopy
 import com.flosi.app.i18n.LocalFlosiLanguage
-import com.flosi.app.i18n.localizedLegacyText
 import com.flosi.app.ui.components.*
 import com.flosi.app.ui.viewmodel.PeopleViewModel
 import com.flosi.app.ui.viewmodel.flosiViewModel
 
 @Composable
 fun PeopleScreen(onOpenPerson:(Long)->Unit,onAddPerson:()->Unit){
-    val vm:PeopleViewModel=flosiViewModel()
-    val people by vm.people.collectAsState()
-    val prefs by vm.preferences.collectAsState()
-    val lang=LocalFlosiLanguage.current
-    val base=CurrencyConverter.normalizeCode(prefs.currency)
-    val missing=linkedSetOf<String>()
+    val vm:PeopleViewModel=flosiViewModel();val people by vm.people.collectAsState();val prefs by vm.preferences.collectAsState();val lang=LocalFlosiLanguage.current;fun c(key:String,vararg values:Pair<String,Any?>)=FlosiPeopleCopy.text(lang,key,*values)
+    val base=CurrencyConverter.normalizeCode(prefs.currency);val missing=linkedSetOf<String>()
+    fun converted(amount:Long,currency:String):Long?{val value=CurrencyConverter.convert(amount,currency,base,prefs.exchangeRates);if(value==null)missing+=CurrencyConverter.normalizeCode(currency);return value}
+    var receivable=0L;var payable=0L
+    people.forEach{person->val value=converted(person.currentBalance,person.currency)?:return@forEach;if(value>=0L)receivable=runCatching{Math.addExact(receivable,value)}.getOrElse{Long.MAX_VALUE}else payable=runCatching{Math.addExact(payable,Math.negateExact(value))}.getOrElse{Long.MAX_VALUE}}
+    val net=runCatching{Math.subtractExact(receivable,payable)}.getOrElse{if(receivable>=payable)Long.MAX_VALUE else Long.MIN_VALUE};val owedToYouCount=people.count{it.currentBalance>0L};val youOweCount=people.count{it.currentBalance<0L}
 
-    fun converted(amount:Long,currency:String):Long?{
-        val value=CurrencyConverter.convert(amount,currency,base,prefs.exchangeRates)
-        if(value==null) missing+=CurrencyConverter.normalizeCode(currency)
-        return value
-    }
-
-    var receivable=0L
-    var payable=0L
-    people.forEach { person ->
-        val value=converted(person.currentBalance,person.currency) ?: return@forEach
-        if(value>=0L) receivable=runCatching{Math.addExact(receivable,value)}.getOrElse{Long.MAX_VALUE}
-        else payable=runCatching{Math.addExact(payable,Math.negateExact(value))}.getOrElse{Long.MAX_VALUE}
-    }
-    val net=runCatching{Math.subtractExact(receivable,payable)}.getOrElse{if(receivable>=payable)Long.MAX_VALUE else Long.MIN_VALUE}
-    val owedToYouCount=people.count{it.currentBalance>0L}
-    val youOweCount=people.count{it.currentBalance<0L}
-    fun s(ar:String,en:String)=if(lang=="ar")ar else en
-
-    FlosiPage(s("الديوان","Diwan"),s("كل ما لك وما عليك في مكان واحد","Everything you are owed and owe in one place")){
+    FlosiPage(c("title"),c("sub")){
         CardBox{
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                Column(Modifier.weight(1f)){
-                    Text(s("لك","Owed to you"),color=FlosiMuted)
-                    Text(moneyText(receivable,base),color=FlosiGreen,style=MaterialTheme.typography.titleMedium)
-                    Text(s("$owedToYouCount أشخاص","$owedToYouCount people"),color=FlosiMuted,style=MaterialTheme.typography.bodySmall)
-                }
-                Column(Modifier.weight(1f)){
-                    Text(s("عليك","You owe"),color=FlosiMuted)
-                    Text(moneyText(payable,base),color=FlosiRed,style=MaterialTheme.typography.titleMedium)
-                    Text(s("$youOweCount أشخاص","$youOweCount people"),color=FlosiMuted,style=MaterialTheme.typography.bodySmall)
-                }
+                Column(Modifier.weight(1f)){Text(c("owed_to_you"),color=FlosiMuted);Text(moneyText(receivable,base),color=FlosiGreen,style=MaterialTheme.typography.titleMedium);Text(c("people_count","count" to owedToYouCount),color=FlosiMuted,style=MaterialTheme.typography.bodySmall)}
+                Column(Modifier.weight(1f)){Text(c("you_owe"),color=FlosiMuted);Text(moneyText(payable,base),color=FlosiRed,style=MaterialTheme.typography.titleMedium);Text(c("people_count","count" to youOweCount),color=FlosiMuted,style=MaterialTheme.typography.bodySmall)}
             }
-            HorizontalDivider(Modifier.padding(vertical=8.dp))
-            Metric(s("الصافي","Net position"),signedMoney(net,base),if(net>=0)FlosiGreen else FlosiRed)
-            if(missing.isNotEmpty())Text(
-                s("لم تدخل في الإجمالي عملات بدون سعر تحويل: ${missing.joinToString()}","Currencies without an exchange rate were excluded: ${missing.joinToString()}"),
-                color=FlosiOrange
-            )
+            HorizontalDivider(Modifier.padding(vertical=8.dp));Metric(c("net"),signedMoney(net,base),if(net>=0)FlosiGreen else FlosiRed)
+            if(missing.isNotEmpty())Text(c("missing_rates","currencies" to missing.joinToString()),color=FlosiOrange)
         }
-
-        SectionTitle(s("الحسابات الشخصية","Personal ledgers"),s("+ شخص","+ Person"),onAddPerson)
-        if(people.isEmpty()){
-            EmptyState(
-                title=s("بعد ما ضفت أحد","No people yet"),
-                subtitle=s("أضف شخص حتى تسجل السلف والديون والتسديدات ويصير عندك كشف واضح لكل واحد.","Add a person to track loans, debts, repayments, and a clear statement for each one."),
-                action=s("إضافة أول شخص","Add first person"),
-                onAction=onAddPerson,
-                symbol="◎"
-            )
-        } else {
-            CardBox{
-                people.sortedWith(compareByDescending<com.flosi.app.data.local.entity.PersonEntity>{kotlin.math.abs(it.currentBalance)}.thenBy{it.name}).forEach{p->
-                    val value=when{
-                        p.currentBalance>0 -> s("لك ${moneyText(p.currentBalance,p.currency)}","Owed to you ${moneyText(p.currentBalance,p.currency)}")
-                        p.currentBalance<0 -> s("عليك ${moneyText(kotlin.math.abs(p.currentBalance),p.currency)}","You owe ${moneyText(kotlin.math.abs(p.currentBalance),p.currency)}")
-                        else -> s("الحساب مصفّى","Settled")
-                    }
-                    val color=when{
-                        p.currentBalance>0 -> FlosiGreen
-                        p.currentBalance<0 -> FlosiRed
-                        else -> FlosiMuted
-                    }
-                    ActionRow(
-                        p.name,
-                        listOf(p.phone,p.currency).filter{it.isNotBlank()}.joinToString(" • "),
-                        value,
-                        color
-                    ){onOpenPerson(p.id)}
-                }
-            }
-        }
-
-        CardBox{
-            Text(s("طريقة الحساب","How it works"),style=MaterialTheme.typography.titleSmall)
-            Text(
-                s("الأخضر = مبلغ لك عند شخص. الأحمر = مبلغ عليك له. التسديدات الجزئية تبقى ضمن كشف حساب الشخص حتى يصل الرصيد إلى صفر.","Green means money owed to you. Red means money you owe. Partial repayments stay in the person's statement until the balance reaches zero."),
-                color=FlosiMuted,
-                style=MaterialTheme.typography.bodySmall
-            )
-        }
+        SectionTitle(c("ledgers"),c("add_person"),onAddPerson)
+        if(people.isEmpty()) EmptyState(title=c("no_people"),subtitle=c("empty_sub"),action=c("add_first"),onAction=onAddPerson,symbol="◎")
+        else CardBox{people.sortedWith(compareByDescending<com.flosi.app.data.local.entity.PersonEntity>{kotlin.math.abs(it.currentBalance)}.thenBy{it.name}).forEach{p->val value=when{p.currentBalance>0->c("owed_value","amount" to moneyText(p.currentBalance,p.currency));p.currentBalance<0->c("owe_value","amount" to moneyText(kotlin.math.abs(p.currentBalance),p.currency));else->c("settled")};val color=when{p.currentBalance>0->FlosiGreen;p.currentBalance<0->FlosiRed;else->FlosiMuted};ActionRow(p.name,listOf(p.phone,p.currency).filter{it.isNotBlank()}.joinToString(" • "),value,color){onOpenPerson(p.id)}}}
+        CardBox{Text(c("how"),style=MaterialTheme.typography.titleSmall);Text(c("how_body"),color=FlosiMuted,style=MaterialTheme.typography.bodySmall)}
     }
 }
