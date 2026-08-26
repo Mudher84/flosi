@@ -8,79 +8,39 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.ui.components.*
 
 @Composable
 fun BankConnectionsScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    var showZainCashInfo by remember { mutableStateOf(false) }
+    val context=LocalContext.current;val lang=LocalFlosiLanguage.current;var showZainCashInfo by remember{mutableStateOf(false)}
+    fun s(ar:String,en:String,tr:String,fr:String,de:String,es:String)=when(lang){"ar"->ar;"tr"->tr;"fr"->fr;"de"->de;"es"->es;else->en}
 
-    FlosiPage(
-        "ربط البنوك والمحافظ",
-        "مكان واحد لإدارة الربط المالي الآمن",
-        onBack
-    ) {
-        CardBox {
-            SectionTitle("المحافظ الإلكترونية")
-            ActionRow(
-                "ZainCash",
-                "بوابة الدفع الرسمية جاهزة من جهة Flosi Backend",
-                "التفاصيل",
-                FlosiPurple,
-                onClick = { showZainCashInfo = true }
-            )
-            Text(
-                "واجهة ZainCash العامة الحالية هي بوابة دفع، وليست API لقراءة رصيد وحركات محفظة المستخدم. Flosi لن يدّعي مزامنة الرصيد إلا إذا وفرت ZainCash API رسمية منفصلة لذلك.",
-                color = FlosiMuted
-            )
+    FlosiPage(s("ربط البنوك والمحافظ","Banks & wallets","Banka ve cüzdan bağlantıları","Banques et portefeuilles","Banken & Wallets","Bancos y billeteras"),s("مكان واحد لإدارة الربط المالي الآمن","One place for secure financial connections","Güvenli finansal bağlantılar için tek yer","Un seul endroit pour les connexions financières sécurisées","Ein Ort für sichere Finanzverbindungen","Un solo lugar para conexiones financieras seguras"),onBack){
+        CardBox{
+            SectionTitle(s("المحافظ الإلكترونية","Digital wallets","Dijital cüzdanlar","Portefeuilles numériques","Digitale Wallets","Billeteras digitales"))
+            ActionRow("ZainCash",s("بوابة الدفع الرسمية جاهزة من جهة Flosi Backend","Official payment gateway support is ready on the Flosi backend","Resmî ödeme ağ geçidi desteği Flosi backend tarafında hazır","La passerelle de paiement officielle est prête côté backend Flosi","Die offizielle Zahlungs-Gateway-Anbindung ist im Flosi-Backend vorbereitet","La pasarela de pago oficial está lista en el backend de Flosi"),s("التفاصيل","Details","Ayrıntılar","Détails","Details","Detalles"),FlosiPurple,onClick={showZainCashInfo=true})
+            Text(s("واجهة ZainCash العامة الحالية هي بوابة دفع، وليست API لقراءة رصيد وحركات محفظة المستخدم. Flosi لن يدّعي مزامنة الرصيد إلا إذا وفرت ZainCash API رسمية منفصلة لذلك.","ZainCash's current public interface is a payment gateway, not an API for reading a user's wallet balance or transactions. Flosi will not claim balance sync unless ZainCash provides an official API for it.","ZainCash'in mevcut genel arayüzü bir ödeme ağ geçididir; kullanıcı cüzdan bakiyesi ve işlemlerini okumaya yönelik API değildir. ZainCash resmî API sağlamadıkça Flosi bakiye senkronizasyonu iddia etmez.","L’interface publique actuelle de ZainCash est une passerelle de paiement, pas une API de lecture du solde ou des transactions. Flosi n’annoncera aucune synchronisation sans API officielle dédiée.","Die aktuelle öffentliche ZainCash-Schnittstelle ist ein Zahlungs-Gateway und keine API zum Lesen von Wallet-Saldo oder Transaktionen. Flosi behauptet keine Synchronisierung ohne offizielle API.","La interfaz pública actual de ZainCash es una pasarela de pago, no una API para leer saldo o movimientos. Flosi no afirmará sincronización sin una API oficial dedicada."),color=FlosiMuted)
         }
-
-        CardBox {
-            SectionTitle("الحسابات البنكية")
-            ActionRow(
-                "ربط بنك",
-                "يظهر البنك هنا عندما تتوفر له واجهة Open Banking / API رسمية",
-                "قريباً",
-                FlosiMuted
-            )
-            ActionRow(
-                "استيراد كشف حساب",
-                "استخدم CSV/XLSX/PDF من مركز البيانات للبنوك التي لا توفر API",
-                "متاح",
-                FlosiGreen
-            )
+        CardBox{
+            SectionTitle(s("الحسابات البنكية","Bank accounts","Banka hesapları","Comptes bancaires","Bankkonten","Cuentas bancarias"))
+            ActionRow(s("ربط بنك","Connect bank","Banka bağla","Connecter une banque","Bank verbinden","Conectar banco"),s("يظهر البنك هنا عندما تتوفر له واجهة Open Banking / API رسمية","A bank appears here when an official Open Banking/API connection is available","Resmî Open Banking/API bağlantısı olduğunda banka burada görünür","Une banque apparaît ici lorsqu’une connexion Open Banking/API officielle est disponible","Eine Bank erscheint hier, sobald eine offizielle Open-Banking/API-Anbindung verfügbar ist","El banco aparecerá aquí cuando exista una conexión Open Banking/API oficial"),s("قريباً","Soon","Yakında","Bientôt","Demnächst","Próximamente"),FlosiMuted)
+            ActionRow(s("استيراد كشف حساب","Import statement","Ekstre içe aktar","Importer un relevé","Kontoauszug importieren","Importar extracto"),s("استخدم CSV/XLSX/PDF من مركز البيانات للبنوك التي لا توفر API","Use CSV/XLSX/PDF from Data Center for banks without an API","API sunmayan bankalar için Veri Merkezi'nden CSV/XLSX/PDF kullan","Utilisez CSV/XLSX/PDF depuis le Centre de données pour les banques sans API","Nutze CSV/XLSX/PDF aus dem Datenzentrum für Banken ohne API","Usa CSV/XLSX/PDF desde el Centro de datos para bancos sin API"),s("متاح","Available","Kullanılabilir","Disponible","Verfügbar","Disponible"),FlosiGreen)
         }
-
-        CardBox {
-            SectionTitle("سياسة الأمان")
-            Text("• لا نخزن بيانات الدخول المصرفية داخل Flosi.", color = FlosiMuted)
-            Text("• لا نستخدم WebView لالتقاط اسم المستخدم أو كلمة المرور.", color = FlosiMuted)
-            Text("• كل ربط حقيقي يجب أن يكون عبر OAuth/API رسمي أو مزود Open Banking معتمد.", color = FlosiMuted)
-            Text("• أسرار ZainCash وGoogle Play تبقى على الخادم فقط ولا تدخل داخل APK.", color = FlosiMuted)
+        CardBox{
+            SectionTitle(s("سياسة الأمان","Security policy","Güvenlik politikası","Politique de sécurité","Sicherheitsrichtlinie","Política de seguridad"))
+            Text(s("• لا نخزن بيانات الدخول المصرفية داخل Flosi.","• Flosi does not store banking login credentials.","• Flosi banka giriş bilgilerini saklamaz.","• Flosi ne stocke pas les identifiants bancaires.","• Flosi speichert keine Bank-Zugangsdaten.","• Flosi no guarda credenciales bancarias."),color=FlosiMuted)
+            Text(s("• لا نستخدم WebView لالتقاط اسم المستخدم أو كلمة المرور.","• We do not use a WebView to capture usernames or passwords.","• Kullanıcı adı veya parola yakalamak için WebView kullanmayız.","• Nous n’utilisons pas WebView pour capturer identifiants ou mots de passe.","• Wir verwenden keine WebView zum Erfassen von Benutzernamen oder Passwörtern.","• No usamos WebView para capturar usuario o contraseña."),color=FlosiMuted)
+            Text(s("• كل ربط حقيقي يجب أن يكون عبر OAuth/API رسمي أو مزود Open Banking معتمد.","• Real connections must use official OAuth/API or an approved Open Banking provider.","• Gerçek bağlantılar resmî OAuth/API veya onaylı Open Banking sağlayıcısı kullanmalıdır.","• Toute connexion réelle doit utiliser OAuth/API officiel ou un fournisseur Open Banking agréé.","• Echte Verbindungen müssen offizielles OAuth/API oder einen zugelassenen Open-Banking-Anbieter nutzen.","• Toda conexión real debe usar OAuth/API oficial o un proveedor Open Banking aprobado."),color=FlosiMuted)
+            Text(s("• أسرار ZainCash وGoogle Play تبقى على الخادم فقط ولا تدخل داخل APK.","• ZainCash and Google Play secrets stay server-side and never enter the APK.","• ZainCash ve Google Play sırları yalnızca sunucuda kalır ve APK'ya girmez.","• Les secrets ZainCash et Google Play restent côté serveur et n’entrent jamais dans l’APK.","• ZainCash- und Google-Play-Secrets bleiben ausschließlich auf dem Server und gelangen nicht in die APK.","• Los secretos de ZainCash y Google Play quedan solo en el servidor y nunca entran en el APK."),color=FlosiMuted)
         }
     }
 
-    if (showZainCashInfo) {
-        AlertDialog(
-            onDismissRequest = { showZainCashInfo = false },
-            title = { Text("ZainCash") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("تم تجهيز Flosi Backend لـ ZainCash Payment Gateway v2: OAuth2، إنشاء الدفع، الاستعلام، والتحقق من الـcallback والـwebhook.")
-                    Text("التشغيل الإنتاجي يحتاج حساب ZainCash Business/Merchant وclient_id وclient_secret وAPI key وserviceType من ZainCash.")
-                    Text("هذه البوابة لا تمنح Flosi صلاحية قراءة رصيد أو حركات محفظة المستخدم.", color = FlosiMuted)
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showZainCashInfo = false
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.zaincash.iq/"))
-                    runCatching { context.startActivity(intent) }
-                }) { Text("فتح وثائق ZainCash") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showZainCashInfo = false }) { Text("إغلاق") }
-            }
-        )
+    if(showZainCashInfo){
+        AlertDialog(onDismissRequest={showZainCashInfo=false},title={Text("ZainCash")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+            Text(s("تم تجهيز Flosi Backend لـ ZainCash Payment Gateway v2: OAuth2، إنشاء الدفع، الاستعلام، والتحقق من callback وwebhook.","Flosi Backend is prepared for ZainCash Payment Gateway v2: OAuth2, payment creation, querying, callback and webhook verification.","Flosi Backend, ZainCash Payment Gateway v2 için hazır: OAuth2, ödeme oluşturma, sorgulama, callback ve webhook doğrulama.","Le backend Flosi est prêt pour ZainCash Payment Gateway v2 : OAuth2, création et interrogation des paiements, validation callback/webhook.","Das Flosi-Backend ist für ZainCash Payment Gateway v2 vorbereitet: OAuth2, Zahlungserstellung, Abfrage sowie Callback-/Webhook-Prüfung.","El backend de Flosi está preparado para ZainCash Payment Gateway v2: OAuth2, creación y consulta de pagos, validación de callback/webhook."))
+            Text(s("التشغيل الإنتاجي يحتاج حساب ZainCash Business/Merchant وclient_id وclient_secret وAPI key وserviceType من ZainCash.","Production requires a ZainCash Business/Merchant account plus client_id, client_secret, API key, and serviceType from ZainCash.","Canlı kullanım için ZainCash Business/Merchant hesabı ile client_id, client_secret, API key ve serviceType gerekir.","La production nécessite un compte ZainCash Business/Merchant ainsi que client_id, client_secret, API key et serviceType.","Für den Produktivbetrieb werden ein ZainCash-Business/Merchant-Konto sowie client_id, client_secret, API key und serviceType benötigt.","Producción requiere una cuenta ZainCash Business/Merchant además de client_id, client_secret, API key y serviceType."))
+            Text(s("هذه البوابة لا تمنح Flosi صلاحية قراءة رصيد أو حركات محفظة المستخدم.","This gateway does not grant Flosi access to a user's wallet balance or transactions.","Bu ağ geçidi Flosi'ye kullanıcı cüzdan bakiyesi veya işlemlerini okuma izni vermez.","Cette passerelle ne donne pas à Flosi l’accès au solde ou aux transactions du portefeuille utilisateur.","Dieses Gateway gibt Flosi keinen Zugriff auf Wallet-Saldo oder Transaktionen des Nutzers.","Esta pasarela no da a Flosi acceso al saldo ni a los movimientos de la billetera del usuario."),color=FlosiMuted)
+        }},confirmButton={Button(onClick={showZainCashInfo=false;runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://docs.zaincash.iq/")))}}){Text(s("فتح وثائق ZainCash","Open ZainCash docs","ZainCash belgelerini aç","Ouvrir la documentation ZainCash","ZainCash-Dokumentation öffnen","Abrir documentación de ZainCash"))}},dismissButton={TextButton(onClick={showZainCashInfo=false}){Text(s("إغلاق","Close","Kapat","Fermer","Schließen","Cerrar"))}})
     }
 }
