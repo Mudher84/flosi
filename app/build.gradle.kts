@@ -74,7 +74,8 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
-    implementation("com.android.billingclient:billing-ktx:8.2.1")
+    // Kept on the Kotlin-2.0-compatible line while Google Play publishing work is deferred.
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.room:room-testing:2.7.2")
