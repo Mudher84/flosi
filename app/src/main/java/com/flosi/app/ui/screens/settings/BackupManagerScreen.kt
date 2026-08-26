@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import com.flosi.app.FlosiApplication
 import com.flosi.app.backup.EncryptedBackupService
 import com.flosi.app.i18n.LocalFlosiLanguage
@@ -21,81 +20,22 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun BackupManagerScreen(onBack:()->Unit){
-    val context=LocalContext.current
-    val app=context.applicationContext as FlosiApplication
-    val lang=LocalFlosiLanguage.current
-    val scope=rememberCoroutineScope()
-    fun s(ar:String,en:String)=if(lang=="ar")ar else en
-
-    var password by remember{mutableStateOf("")}
-    var status by remember{mutableStateOf("")}
-    var success by remember{mutableStateOf(true)}
-    var busy by remember{mutableStateOf(false)}
-
+    val context=LocalContext.current;val app=context.applicationContext as FlosiApplication;val lang=LocalFlosiLanguage.current;val scope=rememberCoroutineScope()
+    fun s(ar:String,en:String,tr:String,fr:String,de:String,es:String)=when(lang){"ar"->ar;"tr"->tr;"fr"->fr;"de"->de;"es"->es;else->en}
+    var password by remember{mutableStateOf("")};var status by remember{mutableStateOf("")};var success by remember{mutableStateOf(true)};var busy by remember{mutableStateOf(false)}
     fun finish(ok:Boolean,message:String){success=ok;status=message;busy=false}
 
-    val createBackup=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")){uri->
-        if(uri!=null){
-            val passwordCopy=password.toCharArray()
-            busy=true;status=""
-            scope.launch {
-                val result=withContext(Dispatchers.IO){runCatching{EncryptedBackupService.backup(context,app.database,uri,passwordCopy)}}
-                result.onSuccess{
-                    password=""
-                    finish(true,s("تم إنشاء نسخة مشفرة AES-GCM بنجاح","AES-GCM encrypted backup created successfully"))
-                }.onFailure{e->finish(false,e.message?:s("فشل النسخ","Backup failed"))}
-            }
-        }
-    }
+    val createBackup=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")){uri->if(uri!=null){val passwordCopy=password.toCharArray();busy=true;status="";scope.launch{val result=withContext(Dispatchers.IO){runCatching{EncryptedBackupService.backup(context,app.database,uri,passwordCopy)}};result.onSuccess{password="";finish(true,s("تم إنشاء نسخة مشفرة AES-GCM بنجاح","AES-GCM encrypted backup created successfully","AES-GCM şifreli yedek başarıyla oluşturuldu","Sauvegarde chiffrée AES-GCM créée avec succès","AES-GCM-verschlüsseltes Backup erfolgreich erstellt","Copia cifrada AES-GCM creada correctamente"))}.onFailure{e->finish(false,e.message?:s("فشل النسخ","Backup failed","Yedekleme başarısız","Échec de la sauvegarde","Backup fehlgeschlagen","Error al crear la copia"))}}}}
+    val restoreBackup=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null){val passwordCopy=password.toCharArray();busy=true;status="";scope.launch{val result=withContext(Dispatchers.IO){runCatching{val bytes=EncryptedBackupService.restoreToTemp(context,uri,passwordCopy);EncryptedBackupService.applyRestore(context,app.database,bytes);app.reloadAfterRestore()}};result.onSuccess{password="";finish(true,s("تم فحص النسخة واسترجاعها وإعادة فتح قاعدة البيانات.","Backup verified, restored, and database reopened.","Yedek doğrulandı, geri yüklendi ve veritabanı yeniden açıldı.","La sauvegarde a été vérifiée, restaurée et la base de données rouverte.","Backup geprüft, wiederhergestellt und Datenbank neu geöffnet.","La copia se verificó, restauró y se reabrió la base de datos."));Toast.makeText(context,s("تم استرجاع نسخة Flosi بنجاح","Flosi backup restored successfully","Flosi yedeği başarıyla geri yüklendi","Sauvegarde Flosi restaurée avec succès","Flosi-Backup erfolgreich wiederhergestellt","Copia de Flosi restaurada correctamente"),Toast.LENGTH_LONG).show();(context as? Activity)?.recreate()}.onFailure{e->finish(false,e.message?:s("فشل الاسترجاع","Restore failed","Geri yükleme başarısız","Échec de la restauration","Wiederherstellung fehlgeschlagen","Error al restaurar"))}}}}
 
-    val restoreBackup=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
-        if(uri!=null){
-            val passwordCopy=password.toCharArray()
-            busy=true;status=""
-            scope.launch {
-                val result=withContext(Dispatchers.IO){
-                    runCatching{
-                        val bytes=EncryptedBackupService.restoreToTemp(context,uri,passwordCopy)
-                        EncryptedBackupService.applyRestore(context,app.database,bytes)
-                        app.reloadAfterRestore()
-                    }
-                }
-                result.onSuccess{
-                    password=""
-                    finish(true,s("تم فحص النسخة واسترجاعها وإعادة فتح قاعدة البيانات.","Backup verified, restored, and database reopened."))
-                    Toast.makeText(context,s("تم استرجاع نسخة Flosi بنجاح","Flosi backup restored successfully"),Toast.LENGTH_LONG).show()
-                    (context as? Activity)?.recreate()
-                }.onFailure{e->finish(false,e.message?:s("فشل الاسترجاع","Restore failed"))}
-            }
-        }
-    }
-
-    FlosiPage(s("إدارة النسخ الاحتياطية","Manage backups"),s("نسخ مشفرة مع فحص سلامة قبل الاسترجاع","Encrypted backups with integrity checks before restore"),onBack){
-        OutlinedTextField(
-            password,
-            {password=it;status=""},
-            Modifier.fillMaxWidth(),
-            label={Text(s("كلمة مرور النسخة","Backup password"))},
-            visualTransformation=PasswordVisualTransformation(),
-            singleLine=true,
-            enabled=!busy
-        )
-        Text(s("استخدم 8 أحرف/أرقام أو أكثر للنسخ الجديدة، ولا تنسَها؛ بدونها لا يمكن فك النسخة. النسخ القديمة ذات 4 أحرف أو أكثر تبقى قابلة للاسترجاع.","Use at least 8 characters for new backups and keep the password safe. Older backups with 4+ characters remain restorable."),color=FlosiMuted)
-        Button(
-            onClick={createBackup.launch("flosi-backup.flosi")},
-            enabled=!busy&&password.length>=EncryptedBackupService.NEW_BACKUP_MIN_PASSWORD,
-            modifier=Modifier.fillMaxWidth()
-        ){
-            if(busy)CircularProgressIndicator(strokeWidth=2.dp)else Text(s("إنشاء نسخة مشفرة","Create encrypted backup"))
-        }
-        OutlinedButton(
-            onClick={restoreBackup.launch(arrayOf("application/octet-stream","*/*"))},
-            enabled=!busy&&password.length>=EncryptedBackupService.LEGACY_RESTORE_MIN_PASSWORD,
-            modifier=Modifier.fillMaxWidth()
-        ){Text(s("فحص واسترجاع نسخة","Verify and restore backup"))}
+    FlosiPage(s("إدارة النسخ الاحتياطية","Manage backups","Yedekleri yönet","Gérer les sauvegardes","Backups verwalten","Gestionar copias"),s("نسخ مشفرة مع فحص سلامة قبل الاسترجاع","Encrypted backups with integrity checks before restore","Geri yüklemeden önce bütünlük denetimli şifreli yedekler","Sauvegardes chiffrées avec contrôle d’intégrité avant restauration","Verschlüsselte Backups mit Integritätsprüfung vor Wiederherstellung","Copias cifradas con verificación de integridad antes de restaurar"),onBack){
+        OutlinedTextField(password,{password=it;status=""},Modifier.fillMaxWidth(),label={Text(s("كلمة مرور النسخة","Backup password","Yedek parolası","Mot de passe de sauvegarde","Backup-Passwort","Contraseña de la copia"))},visualTransformation=PasswordVisualTransformation(),singleLine=true,enabled=!busy)
+        Text(s("استخدم 8 أحرف/أرقام أو أكثر للنسخ الجديدة، ولا تنسَها؛ بدونها لا يمكن فك النسخة. النسخ القديمة ذات 4 أحرف أو أكثر تبقى قابلة للاسترجاع.","Use at least 8 characters for new backups and keep the password safe. Older backups with 4+ characters remain restorable.","Yeni yedeklerde en az 8 karakter kullan ve parolayı sakla. 4+ karakterli eski yedekler geri yüklenebilir.","Utilisez au moins 8 caractères pour les nouvelles sauvegardes et conservez le mot de passe. Les anciennes sauvegardes de 4+ caractères restent restaurables.","Verwende für neue Backups mindestens 8 Zeichen und bewahre das Passwort sicher auf. Ältere Backups mit 4+ Zeichen bleiben wiederherstellbar.","Usa al menos 8 caracteres para copias nuevas y guarda la contraseña. Las copias antiguas de 4+ caracteres siguen siendo restaurables."),color=FlosiMuted)
+        Button(onClick={createBackup.launch("flosi-backup.flosi")},enabled=!busy&&password.length>=EncryptedBackupService.NEW_BACKUP_MIN_PASSWORD,modifier=Modifier.fillMaxWidth()){if(busy)CircularProgressIndicator(strokeWidth=2.dp)else Text(s("إنشاء نسخة مشفرة","Create encrypted backup","Şifreli yedek oluştur","Créer une sauvegarde chiffrée","Verschlüsseltes Backup erstellen","Crear copia cifrada"))}
+        OutlinedButton(onClick={restoreBackup.launch(arrayOf("application/octet-stream","*/*"))},enabled=!busy&&password.length>=EncryptedBackupService.LEGACY_RESTORE_MIN_PASSWORD,modifier=Modifier.fillMaxWidth()){Text(s("فحص واسترجاع نسخة","Verify and restore backup","Yedeği doğrula ve geri yükle","Vérifier et restaurer","Backup prüfen und wiederherstellen","Verificar y restaurar copia"))}
         if(status.isNotBlank())CardBox{Text(status,color=if(success)FlosiGreen else FlosiRed)}
-        CardBox{Text(s("قبل استبدال بياناتك، Flosi يتحقق من ترويسة SQLite، سلامة quick_check، وجود جداول التطبيق الأساسية، وحدود أحجام الملف. الاستبدال يتم بملف مؤقت مع رجوع للنسخة السابقة إذا فشل التثبيت.","Before replacing data, Flosi verifies the SQLite header, quick_check integrity, required app tables, and file-size limits. Restore uses a temporary file and rolls back if installation fails."),color=FlosiMuted)}
-        CardBox{Text(s("من نافذة اختيار الملف تقدر تختار Google Drive مباشرة؛ ما يحتاج OAuth خاص للتخزين اليدوي عبر Android.","Google Drive can be chosen directly from Android's file picker; manual storage does not require separate OAuth."),color=FlosiMuted)}
-        CardBox{Text(s("هذه النسخة تحفظ السجل المالي في قاعدة البيانات. إعدادات الجهاز الحساسة مثل PIN والبصمة لا تُنسخ عمداً.","This backup preserves the financial database. Device-sensitive settings such as PIN and biometrics are intentionally not copied."),color=FlosiMuted)}
+        CardBox{Text(s("قبل استبدال بياناتك، Flosi يتحقق من ترويسة SQLite، سلامة quick_check، وجود جداول التطبيق الأساسية، وحدود أحجام الملف. الاستبدال يتم بملف مؤقت مع رجوع للنسخة السابقة إذا فشل التثبيت.","Before replacing data, Flosi verifies the SQLite header, quick_check integrity, required app tables, and file-size limits. Restore uses a temporary file and rolls back if installation fails.","Veriler değiştirilmeden önce Flosi SQLite başlığını, quick_check bütünlüğünü, gerekli tabloları ve dosya boyutu sınırlarını doğrular. Geri yükleme geçici dosya kullanır ve hata durumunda geri döner.","Avant le remplacement, Flosi vérifie l’en-tête SQLite, quick_check, les tables requises et les limites de taille. La restauration utilise un fichier temporaire et revient en arrière en cas d’échec.","Vor dem Ersetzen prüft Flosi SQLite-Header, quick_check, erforderliche Tabellen und Dateigrößen. Die Wiederherstellung nutzt eine temporäre Datei und rollt bei Fehlern zurück.","Antes de reemplazar datos, Flosi verifica la cabecera SQLite, quick_check, tablas necesarias y límites de tamaño. La restauración usa un archivo temporal y revierte si falla."),color=FlosiMuted)}
+        CardBox{Text(s("من نافذة اختيار الملف تقدر تختار Google Drive مباشرة؛ ما يحتاج OAuth خاص للتخزين اليدوي عبر Android.","Google Drive can be chosen directly from Android's file picker; manual storage does not require separate OAuth.","Google Drive doğrudan Android dosya seçicisinden seçilebilir; manuel depolama için ayrı OAuth gerekmez.","Google Drive peut être choisi directement dans le sélecteur de fichiers Android ; aucun OAuth séparé n’est requis.","Google Drive kann direkt über die Android-Dateiauswahl gewählt werden; für manuelle Speicherung ist kein separates OAuth nötig.","Google Drive puede elegirse directamente desde el selector de archivos de Android; no requiere OAuth separado."),color=FlosiMuted)}
+        CardBox{Text(s("هذه النسخة تحفظ السجل المالي في قاعدة البيانات. إعدادات الجهاز الحساسة مثل PIN والبصمة لا تُنسخ عمداً.","This backup preserves the financial database. Device-sensitive settings such as PIN and biometrics are intentionally not copied.","Bu yedek finansal veritabanını korur. PIN ve biyometri gibi cihaza özel hassas ayarlar bilerek kopyalanmaz.","Cette sauvegarde conserve la base financière. Les réglages sensibles de l’appareil comme le PIN et la biométrie ne sont volontairement pas copiés.","Dieses Backup sichert die Finanzdatenbank. Gerätesensible Einstellungen wie PIN und Biometrie werden bewusst nicht kopiert.","Esta copia conserva la base financiera. Los ajustes sensibles del dispositivo, como PIN y biometría, no se copian intencionalmente."),color=FlosiMuted)}
     }
 }
