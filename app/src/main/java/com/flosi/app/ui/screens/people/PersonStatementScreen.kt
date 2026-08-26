@@ -15,43 +15,16 @@ import java.text.DateFormat
 @Composable
 fun PersonStatementScreen(id:Long,onBack:()->Unit,onAddTx:()->Unit,onAddCommitment:(Long)->Unit){
     val repo=rememberFlosiRepository();val lang=LocalFlosiLanguage.current
-    val person by repo.observePerson(id).collectAsState(initial=null)
-    val txs by repo.observePersonTransactions(id).collectAsState(initial=emptyList())
-    val commitments by repo.commitments.collectAsState(initial=emptyList())
-    val accounts by repo.accounts.collectAsState(initial=emptyList())
-    val linkedCommitments=commitments.filter{it.personId==id}.sortedBy{it.dueAt}
-    val accountMap=accounts.associateBy{it.id}
-    fun s(ar:String,en:String)=if(lang=="ar")ar else en
+    fun s(ar:String,en:String,tr:String,fr:String,de:String,es:String)=when(lang){"ar"->ar;"tr"->tr;"fr"->fr;"de"->de;"es"->es;else->en}
+    val person by repo.observePerson(id).collectAsState(initial=null);val txs by repo.observePersonTransactions(id).collectAsState(initial=emptyList());val commitments by repo.commitments.collectAsState(initial=emptyList());val accounts by repo.accounts.collectAsState(initial=emptyList());val linkedCommitments=commitments.filter{it.personId==id}.sortedBy{it.dueAt};val accountMap=accounts.associateBy{it.id}
 
-    FlosiPage(person?.name ?: localizedLegacyText("كشف الحساب"),s("الديوان • ديون وسلف وأقساط","Diwan • debts, loans and installments"),onBack){
-        person?.let{p->
-            CardBox{
-                Metric(if(p.currentBalance>=0)s("لك عنده","Owed to you")else s("عليك له","You owe"),moneyText(kotlin.math.abs(p.currentBalance),p.currency),if(p.currentBalance>=0)FlosiGreen else FlosiRed)
-                if(p.phone.isNotBlank())Text(p.phone)
-                Text(s("عملة حساب الشخص: ${p.currency}","Person balance currency: ${p.currency}"),color=FlosiMuted)
-            }
-        }
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-            Button(onClick=onAddTx,modifier=Modifier.weight(1f)){Text(s("+ حركة","+ Entry"))}
-            OutlinedButton(onClick={onAddCommitment(id)},modifier=Modifier.weight(1f)){Text(s("+ قسط / استحقاق","+ Installment"))}
-        }
-
+    FlosiPage(person?.name ?: localizedLegacyText("كشف الحساب"),s("الديوان • ديون وسلف وأقساط","Diwan • debts, loans and installments","Defter • borçlar, alacaklar ve taksitler","Registre • dettes, prêts et échéances","Kontobuch • Schulden, Darlehen und Raten","Libro • deudas, préstamos y cuotas"),onBack){
+        person?.let{p->CardBox{Metric(if(p.currentBalance>=0)s("لك عنده","Owed to you","Sana borçlu","On vous doit","Dir geschuldet","Te debe")else s("عليك له","You owe","Ona borçlusun","Vous devez","Du schuldest","Le debes"),moneyText(kotlin.math.abs(p.currentBalance),p.currency),if(p.currentBalance>=0)FlosiGreen else FlosiRed);if(p.phone.isNotBlank())Text(p.phone);Text(s("عملة حساب الشخص: ${p.currency}","Person balance currency: ${p.currency}","Kişi bakiyesi para birimi: ${p.currency}","Devise du solde de la personne : ${p.currency}","Währung des Personensaldos: ${p.currency}","Moneda del saldo de la persona: ${p.currency}"),color=FlosiMuted)}}
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(onClick=onAddTx,modifier=Modifier.weight(1f)){Text(s("+ حركة","+ Entry","+ İşlem","+ Transaction","+ Eintrag","+ Movimiento"))};OutlinedButton(onClick={onAddCommitment(id)},modifier=Modifier.weight(1f)){Text(s("+ قسط / استحقاق","+ Installment","+ Taksit / ödeme","+ Échéance","+ Rate / Fälligkeit","+ Cuota / vencimiento"))}}
         if(linkedCommitments.isNotEmpty()){
-            SectionTitle(s("الأقساط والاستحقاقات","Installments & due items"))
-            CardBox{
-                linkedCommitments.forEach{item->
-                    val account=accountMap[item.accountId]
-                    val overdue=item.dueAt<System.currentTimeMillis()
-                    ActionRow(item.title,DateFormat.getDateInstance(DateFormat.MEDIUM).format(item.dueAt),moneyText(item.amount,account?.currency?:person?.currency?:"IQD"),if(overdue)FlosiRed else FlosiOrange)
-                    if(overdue)Text(s("متأخر عن موعده","Overdue"),color=FlosiRed)
-                }
-            }
+            SectionTitle(s("الأقساط والاستحقاقات","Installments & due items","Taksitler ve ödemeler","Échéances et versements","Raten & Fälligkeiten","Cuotas y vencimientos"))
+            CardBox{linkedCommitments.forEach{item->val account=accountMap[item.accountId];val overdue=item.dueAt<System.currentTimeMillis();ActionRow(item.title,DateFormat.getDateInstance(DateFormat.MEDIUM).format(item.dueAt),moneyText(item.amount,account?.currency?:person?.currency?:"IQD"),if(overdue)FlosiRed else FlosiOrange);if(overdue)Text(s("متأخر عن موعده","Overdue","Gecikmiş","En retard","Überfällig","Vencido"),color=FlosiRed)}}
         }
-
-        SectionTitle(flosiText("activity"))
-        CardBox{
-            if(txs.isEmpty())Text(localizedLegacyText("ماكو حركات مرتبطة"),color=FlosiMuted)
-            txs.forEach{t->ActionRow(t.title,listOfNotNull(t.categoryName,t.accountName).joinToString(" • "),moneyText(t.amount,t.accountCurrency),if(t.kind in setOf("income","invoice_payment","debt_received"))FlosiGreen else FlosiRed)}
-        }
+        SectionTitle(flosiText("activity"));CardBox{if(txs.isEmpty())Text(localizedLegacyText("ماكو حركات مرتبطة"),color=FlosiMuted);txs.forEach{t->ActionRow(t.title,listOfNotNull(t.categoryName,t.accountName).joinToString(" • "),moneyText(t.amount,t.accountCurrency),if(t.kind in setOf("income","invoice_payment","debt_received"))FlosiGreen else FlosiRed)}}
     }
 }
