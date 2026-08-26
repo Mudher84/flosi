@@ -46,13 +46,13 @@ jobs:
           printf '%s' "$CLEANED" | base64 --decode > "$RUNNER_TEMP/flosi-release.keystore"
           test -s "$RUNNER_TEMP/flosi-release.keystore"
 
-      - name: Build signed release APK
+      - name: Build signed release APK and AAB
         env:
           FLOSI_STORE_FILE: ${{ runner.temp }}/flosi-release.keystore
           FLOSI_KEYSTORE_PASSWORD: ${{ secrets.FLOSI_KEYSTORE_PASSWORD }}
           FLOSI_KEY_ALIAS: ${{ secrets.FLOSI_KEY_ALIAS }}
           FLOSI_KEY_PASSWORD: ${{ secrets.FLOSI_KEY_PASSWORD }}
-        run: gradle --no-daemon assembleRelease --stacktrace
+        run: gradle --no-daemon assembleRelease bundleRelease --stacktrace
 
       - name: Verify APK signature and Firebase fingerprints
         shell: bash
@@ -70,8 +70,23 @@ jobs:
           test "$SHA256" = "138b997ec6ab9906a4702c642bdf5893e585206a07bd04f717160cc3984443dc"
           echo "Release APK signature and Firebase fingerprints verified."
 
+      - name: Verify release AAB exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="$(find app/build/outputs/bundle/release -name '*.aab' -type f | head -n 1)"
+          test -n "$AAB"
+          test -s "$AAB"
+          echo "Release AAB built: $AAB"
+
       - uses: actions/upload-artifact@v4
         with:
           name: flosi-signed-release-apk
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flosi-signed-release-aab
+          path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
