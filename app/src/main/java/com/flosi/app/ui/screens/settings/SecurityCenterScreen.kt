@@ -13,317 +13,73 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import com.flosi.app.i18n.LocalFlosiLanguage
 import com.flosi.app.i18n.flosiText
 import com.flosi.app.security.AppSecurity
 import com.flosi.app.ui.components.*
 
-@Composable
-fun SecurityCenterScreen(
-    onBack: () -> Unit,
-    onBackups: () -> Unit,
-    onSecurityChanged: () -> Unit = {},
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var biometric by remember { mutableStateOf(AppSecurity.biometricEnabled(context)) }
-    var hasPin by remember { mutableStateOf(AppSecurity.hasPin(context)) }
-    var secureScreen by remember { mutableStateOf(AppSecurity.screenSecureEnabled(context)) }
-    var autoLock by remember { mutableIntStateOf(AppSecurity.autoLockSeconds(context)) }
-    var showPinDialog by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
-
-    val biometricAvailable = AppSecurity.biometricStatus(context) == BiometricManager.BIOMETRIC_SUCCESS
-    val activeLayers = listOf(hasPin, biometric, secureScreen).count { it }
-    val protectionLabel = when {
-        activeLayers >= 3 -> "حماية قوية"
-        activeLayers == 2 -> "حماية جيدة"
-        activeLayers == 1 -> "حماية أساسية"
-        else -> "بدون قفل دخول"
-    }
-
-    FlosiPage("أمان Flosi", flosiText("security_sub"), onBack) {
-        CardBox {
-            Metric("مستوى الحماية", protectionLabel, if (activeLayers >= 2) FlosiGreen else FlosiOrange)
-            Text("PIN هو وسيلة الاسترجاع الأساسية، ويمكن إضافة البصمة أو الوجه كفتح سريع فوقه.", color = FlosiMuted)
-        }
-
-        SectionTitle("فتح التطبيق")
-        CardBox {
-            SecuritySwitchRow(
-                title = flosiText("pin_6"),
-                subtitle = if (hasPin) "مفعّل ويمكن تغييره متى تريد" else "فعّله أولاً إذا تريد استخدام قفل التطبيق أو القياسات الحيوية",
-                checked = hasPin,
-            ) { enabled ->
-                if (enabled) {
-                    showPinDialog = true
-                } else {
-                    AppSecurity.clearPin(context)
-                    hasPin = false
-                    biometric = false
-                    message = "تم إيقاف PIN والقياسات الحيوية"
-                    onSecurityChanged()
-                }
-            }
-            if (hasPin) {
-                HorizontalDivider(color = FlosiLine)
-                TextButton(onClick = { showPinDialog = true }) { Text("تغيير PIN") }
-            }
-            HorizontalDivider(color = FlosiLine)
-            SecuritySwitchRow(
-                title = "البصمة أو الوجه",
-                subtitle = when {
-                    !hasPin -> "فعّل PIN أولاً حتى يبقى عندك طريق دخول احتياطي"
-                    biometricAvailable -> "فتح سريع باستخدام القياسات الحيوية المسجلة في الجهاز"
-                    else -> "غير متاحة حالياً على هذا الجهاز"
-                },
-                checked = biometric,
-                enabled = hasPin && (biometricAvailable || biometric),
-            ) { enabled ->
-                val error = runCatching { AppSecurity.setBiometricEnabled(context, enabled) }.exceptionOrNull()?.message
-                if (error != null) {
-                    message = error
-                } else {
-                    biometric = enabled
-                    message = if (enabled) "تم تفعيل البصمة أو الوجه" else "تم إيقاف البصمة أو الوجه"
-                    onSecurityChanged()
-                }
-            }
-        }
-
-        SectionTitle("القفل والخصوصية")
-        CardBox {
-            Text(flosiText("auto_lock"), color = FlosiText)
-            Text("يعمل عند تفعيل PIN، ويمكن استخدام البصمة أو الوجه للفتح السريع.", color = FlosiMuted)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
-                listOf(0 to "فوراً", 30 to "30ث", 60 to "1د", 300 to "5د").forEach { (seconds, label) ->
-                    FilterChip(
-                        selected = autoLock == seconds,
-                        onClick = {
-                            AppSecurity.setAutoLockSeconds(context, seconds)
-                            autoLock = seconds
-                            message = "تم حفظ مدة القفل التلقائي"
-                            onSecurityChanged()
-                        },
-                        label = { Text(label) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            HorizontalDivider(color = FlosiLine, modifier = Modifier.padding(vertical = 8.dp))
-            SecuritySwitchRow(
-                title = flosiText("screen_protection"),
-                subtitle = "يمنع تصوير الشاشة ويخفي المحتوى من التطبيقات الأخيرة",
-                checked = secureScreen,
-            ) {
-                AppSecurity.setScreenSecureEnabled(context, it)
-                secureScreen = it
-                message = if (it) "تم تفعيل حماية الشاشة" else "تم إيقاف حماية الشاشة"
-                onSecurityChanged()
-            }
-        }
-
-        SectionTitle("البيانات")
-        CardBox {
-            ActionRow(
-                "النسخ الاحتياطية المشفرة",
-                "إدارة النسخ والاستعادة بأمان",
-                "إدارة",
-                FlosiPurple,
-                onBackups,
-            )
-        }
-
-        message?.let {
-            Surface(color = FlosiPurpleSoft, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
-                Text(it, modifier = Modifier.padding(12.dp), color = FlosiPurple)
-            }
-        }
-
-        if (hasPin || biometric) {
-            Button(
-                onClick = {
-                    AppSecurity.lockNow()
-                    message = "سيظهر القفل عند الرجوع أو إعادة فتح التطبيق."
-                    onSecurityChanged()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("قفل Flosi الآن")
-            }
-        }
-    }
-
-    if (showPinDialog) {
-        PinSetupDialog(onDismiss = { showPinDialog = false }) { pin ->
-            val error = runCatching { AppSecurity.setPin(context, pin) }.exceptionOrNull()?.message
-            if (error == null) {
-                hasPin = true
-                showPinDialog = false
-                message = "تم حفظ PIN المكوّن من 6 أرقام"
-                onSecurityChanged()
-            } else {
-                message = error
-            }
-        }
-    }
+private fun securityText(lang:String,ar:String,en:String,tr:String,fr:String,de:String,es:String)=when(lang){"ar"->ar;"tr"->tr;"fr"->fr;"de"->de;"es"->es;else->en}
+private fun localizedSecurityError(raw:String?,lang:String):String{
+    if(raw.isNullOrBlank()) return securityText(lang,"حدث خطأ في الأمان","Security action failed","Güvenlik işlemi başarısız","Échec de l’action de sécurité","Sicherheitsaktion fehlgeschlagen","Falló la acción de seguridad")
+    if(lang=="ar"||raw.none{it in '\u0600'..'\u06FF'}) return raw
+    return securityText(lang,"حدث خطأ في الأمان","Security action failed. Try again.","Güvenlik işlemi başarısız. Tekrar dene.","Échec de l’action de sécurité. Réessayez.","Sicherheitsaktion fehlgeschlagen. Versuche es erneut.","Falló la acción de seguridad. Inténtalo de nuevo.")
 }
 
 @Composable
-fun FlosiLockScreen(onUnlocked: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val activity = remember(context) { context.findFragmentActivity() }
-    var pin by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    val biometricEnabled = AppSecurity.biometricEnabled(context)
-    val biometricAvailable = AppSecurity.biometricAvailable(context)
-    val hasPin = AppSecurity.hasPin(context)
-    var prompted by remember { mutableStateOf(false) }
+fun SecurityCenterScreen(onBack:()->Unit,onBackups:()->Unit,onSecurityChanged:()->Unit={}){
+    val context=androidx.compose.ui.platform.LocalContext.current;val lang=LocalFlosiLanguage.current
+    fun s(ar:String,en:String,tr:String,fr:String,de:String,es:String)=securityText(lang,ar,en,tr,fr,de,es)
+    var biometric by remember{mutableStateOf(AppSecurity.biometricEnabled(context))};var hasPin by remember{mutableStateOf(AppSecurity.hasPin(context))};var secureScreen by remember{mutableStateOf(AppSecurity.screenSecureEnabled(context))};var autoLock by remember{mutableIntStateOf(AppSecurity.autoLockSeconds(context))};var showPinDialog by remember{mutableStateOf(false)};var message by remember{mutableStateOf<String?>(null)}
+    val biometricAvailable=AppSecurity.biometricStatus(context)==BiometricManager.BIOMETRIC_SUCCESS
+    val activeLayers=listOf(hasPin,biometric,secureScreen).count{it}
+    val protectionLabel=when{activeLayers>=3->s("حماية قوية","Strong protection","Güçlü koruma","Protection forte","Starker Schutz","Protección fuerte");activeLayers==2->s("حماية جيدة","Good protection","İyi koruma","Bonne protection","Guter Schutz","Buena protección");activeLayers==1->s("حماية أساسية","Basic protection","Temel koruma","Protection de base","Basisschutz","Protección básica");else->s("بدون قفل دخول","No app lock","Uygulama kilidi yok","Aucun verrouillage","Keine App-Sperre","Sin bloqueo de app")}
 
-    fun unlockWithBiometric() {
-        val host = activity
-        if (host == null) {
-            error = if (hasPin) "تعذر تشغيل البصمة. استخدم PIN." else "تعذر تشغيل البصمة أو الوجه."
-            return
+    FlosiPage(s("أمان Flosi","Flosi security","Flosi güvenliği","Sécurité Flosi","Flosi-Sicherheit","Seguridad de Flosi"),flosiText("security_sub"),onBack){
+        CardBox{Metric(s("مستوى الحماية","Protection level","Koruma düzeyi","Niveau de protection","Schutzniveau","Nivel de protección"),protectionLabel,if(activeLayers>=2)FlosiGreen else FlosiOrange);Text(s("PIN هو وسيلة الاسترجاع الأساسية، ويمكن إضافة البصمة أو الوجه كفتح سريع فوقه.","PIN is the primary recovery method; biometrics can be added for quick unlock.","PIN temel kurtarma yöntemidir; hızlı açma için biyometri eklenebilir.","Le PIN est la méthode de récupération principale ; la biométrie peut être ajoutée pour un déverrouillage rapide.","Die PIN ist die primäre Wiederherstellungsmethode; Biometrie kann zum schnellen Entsperren ergänzt werden.","El PIN es el método principal de recuperación; puedes añadir biometría para desbloqueo rápido."),color=FlosiMuted)}
+
+        SectionTitle(s("فتح التطبيق","App unlock","Uygulama kilidi","Déverrouillage","App entsperren","Desbloqueo de app"))
+        CardBox{
+            SecuritySwitchRow(title=flosiText("pin_6"),subtitle=if(hasPin)s("مفعّل ويمكن تغييره متى تريد","Enabled and can be changed anytime","Etkin; istediğin zaman değiştirebilirsin","Activé et modifiable à tout moment","Aktiviert und jederzeit änderbar","Activado y se puede cambiar en cualquier momento")else s("فعّله أولاً إذا تريد استخدام قفل التطبيق أو القياسات الحيوية","Enable it first to use app lock or biometrics","Uygulama kilidi veya biyometri için önce etkinleştir","Activez-le d’abord pour utiliser le verrouillage ou la biométrie","Aktiviere sie zuerst für App-Sperre oder Biometrie","Actívalo primero para usar bloqueo o biometría"),checked=hasPin){enabled->if(enabled)showPinDialog=true else{AppSecurity.clearPin(context);hasPin=false;biometric=false;message=s("تم إيقاف PIN والقياسات الحيوية","PIN and biometrics disabled","PIN ve biyometri kapatıldı","PIN et biométrie désactivés","PIN und Biometrie deaktiviert","PIN y biometría desactivados");onSecurityChanged()}}
+            if(hasPin){HorizontalDivider(color=FlosiLine);TextButton(onClick={showPinDialog=true}){Text(s("تغيير PIN","Change PIN","PIN değiştir","Modifier le PIN","PIN ändern","Cambiar PIN"))}}
+            HorizontalDivider(color=FlosiLine)
+            SecuritySwitchRow(title=s("البصمة أو الوجه","Fingerprint or face","Parmak izi veya yüz","Empreinte ou visage","Fingerabdruck oder Gesicht","Huella o rostro"),subtitle=when{!hasPin->s("فعّل PIN أولاً حتى يبقى عندك طريق دخول احتياطي","Enable PIN first so you keep a backup unlock method","Yedek açma yöntemi için önce PIN'i etkinleştir","Activez d’abord le PIN pour conserver une méthode de secours","Aktiviere zuerst die PIN als alternative Entsperrmethode","Activa primero el PIN como método alternativo");biometricAvailable->s("فتح سريع باستخدام القياسات الحيوية المسجلة في الجهاز","Quick unlock using biometrics registered on this device","Cihazdaki kayıtlı biyometriyle hızlı açma","Déverrouillage rapide avec la biométrie enregistrée","Schnelles Entsperren mit registrierter Biometrie","Desbloqueo rápido con la biometría registrada");else->s("غير متاحة حالياً على هذا الجهاز","Not currently available on this device","Bu cihazda şu anda kullanılamıyor","Indisponible sur cet appareil","Auf diesem Gerät derzeit nicht verfügbar","No disponible en este dispositivo")},checked=biometric,enabled=hasPin&&(biometricAvailable||biometric)){enabled->val error=runCatching{AppSecurity.setBiometricEnabled(context,enabled)}.exceptionOrNull()?.message;if(error!=null)message=localizedSecurityError(error,lang) else{biometric=enabled;message=if(enabled)s("تم تفعيل البصمة أو الوجه","Biometrics enabled","Biyometri etkinleştirildi","Biométrie activée","Biometrie aktiviert","Biometría activada")else s("تم إيقاف البصمة أو الوجه","Biometrics disabled","Biyometri kapatıldı","Biométrie désactivée","Biometrie deaktiviert","Biometría desactivada");onSecurityChanged()}}
         }
-        AppSecurity.authenticateBiometric(
-            activity = host,
-            onSuccess = {
-                error = null
-                onUnlocked()
-            },
-            onUnavailable = { error = it },
-            onUsePin = { error = null },
-        )
+
+        SectionTitle(s("القفل والخصوصية","Lock & privacy","Kilit ve gizlilik","Verrouillage et confidentialité","Sperre & Datenschutz","Bloqueo y privacidad"))
+        CardBox{
+            Text(flosiText("auto_lock"),color=FlosiText);Text(s("يعمل عند تفعيل PIN، ويمكن استخدام البصمة أو الوجه للفتح السريع.","Works when PIN is enabled; biometrics can be used for quick unlock.","PIN etkin olduğunda çalışır; hızlı açma için biyometri kullanılabilir.","Fonctionne lorsque le PIN est activé ; la biométrie peut servir au déverrouillage rapide.","Funktioniert bei aktivierter PIN; Biometrie kann zum schnellen Entsperren genutzt werden.","Funciona con PIN activado; la biometría puede usarse para desbloqueo rápido."),color=FlosiMuted);Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement=Arrangement.spacedBy(7.dp),modifier=Modifier.fillMaxWidth()){listOf(0 to s("فوراً","Now","Hemen","Immédiat","Sofort","Ahora"),30 to "30s",60 to "1m",300 to "5m").forEach{(seconds,label)->FilterChip(selected=autoLock==seconds,onClick={AppSecurity.setAutoLockSeconds(context,seconds);autoLock=seconds;message=s("تم حفظ مدة القفل التلقائي","Auto-lock time saved","Otomatik kilit süresi kaydedildi","Durée de verrouillage enregistrée","Auto-Sperrzeit gespeichert","Tiempo de bloqueo guardado");onSecurityChanged()},label={Text(label)},modifier=Modifier.weight(1f))}}
+            HorizontalDivider(color=FlosiLine,modifier=Modifier.padding(vertical=8.dp))
+            SecuritySwitchRow(title=flosiText("screen_protection"),subtitle=s("يمنع تصوير الشاشة ويخفي المحتوى من التطبيقات الأخيرة","Blocks screenshots and hides content from recent apps","Ekran görüntülerini engeller ve içeriği son uygulamalardan gizler","Bloque les captures et masque le contenu dans les apps récentes","Blockiert Screenshots und blendet Inhalte in letzten Apps aus","Bloquea capturas y oculta contenido de apps recientes"),checked=secureScreen){AppSecurity.setScreenSecureEnabled(context,it);secureScreen=it;message=if(it)s("تم تفعيل حماية الشاشة","Screen protection enabled","Ekran koruması etkinleştirildi","Protection d’écran activée","Bildschirmschutz aktiviert","Protección de pantalla activada")else s("تم إيقاف حماية الشاشة","Screen protection disabled","Ekran koruması kapatıldı","Protection d’écran désactivée","Bildschirmschutz deaktiviert","Protección de pantalla desactivada");onSecurityChanged()}
+        }
+
+        SectionTitle(s("البيانات","Data","Veriler","Données","Daten","Datos"))
+        CardBox{ActionRow(s("النسخ الاحتياطية المشفرة","Encrypted backups","Şifreli yedekler","Sauvegardes chiffrées","Verschlüsselte Backups","Copias cifradas"),s("إدارة النسخ والاستعادة بأمان","Manage backup and restore securely","Yedekleme ve geri yüklemeyi güvenle yönet","Gérer sauvegarde et restauration en toute sécurité","Backups und Wiederherstellung sicher verwalten","Gestiona copias y restauración de forma segura"),s("إدارة","Manage","Yönet","Gérer","Verwalten","Gestionar"),FlosiPurple,onBackups)}
+        message?.let{Surface(color=FlosiPurpleSoft,shape=MaterialTheme.shapes.large,modifier=Modifier.fillMaxWidth()){Text(it,modifier=Modifier.padding(12.dp),color=FlosiPurple)}}
+        if(hasPin||biometric){Button(onClick={AppSecurity.lockNow();message=s("سيظهر القفل عند الرجوع أو إعادة فتح التطبيق.","The lock will appear when you return or reopen the app.","Geri döndüğünde veya uygulamayı yeniden açtığında kilit görünecek.","Le verrou apparaîtra au retour ou à la réouverture de l’application.","Die Sperre erscheint beim Zurückkehren oder erneuten Öffnen der App.","El bloqueo aparecerá al volver o reabrir la app.");onSecurityChanged()},modifier=Modifier.fillMaxWidth()){Text(s("قفل Flosi الآن","Lock Flosi now","Flosi'yi şimdi kilitle","Verrouiller Flosi maintenant","Flosi jetzt sperren","Bloquear Flosi ahora"))}}
     }
 
-    LaunchedEffect(biometricEnabled, biometricAvailable) {
-        if (biometricEnabled && biometricAvailable && !prompted) {
-            prompted = true
-            unlockWithBiometric()
-        }
-    }
-
-    Surface(color = FlosiBg, modifier = Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxSize().statusBarsPadding().padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Surface(color = FlosiPurpleSoft, shape = MaterialTheme.shapes.extraLarge) {
-                Text("◆", modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp), color = FlosiPurple)
-            }
-            Spacer(Modifier.height(18.dp))
-            Text("Flosi مقفول", style = MaterialTheme.typography.headlineSmall, color = FlosiText)
-            Spacer(Modifier.height(6.dp))
-            Text("تحقق قبل عرض بياناتك المالية", color = FlosiMuted)
-            Spacer(Modifier.height(22.dp))
-
-            if (hasPin) {
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = {
-                        pin = it.filter(Char::isDigit).take(6)
-                        error = null
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(flosiText("pin_6")) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                )
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = {
-                        if (AppSecurity.verifyPin(context, pin)) {
-                            AppSecurity.markUnlocked(context)
-                            pin = ""
-                            error = null
-                            onUnlocked()
-                        } else {
-                            error = "PIN غير صحيح"
-                        }
-                    },
-                    enabled = pin.length == 6,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("فتح")
-                }
-            }
-
-            if (biometricEnabled) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = ::unlockWithBiometric,
-                    enabled = biometricAvailable,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (biometricAvailable) "استخدام البصمة أو الوجه" else "القياسات الحيوية غير متاحة — استخدم PIN")
-                }
-            }
-
-            error?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(it, color = FlosiRed)
-            }
-        }
-    }
+    if(showPinDialog)PinSetupDialog(onDismiss={showPinDialog=false}){pin->val error=runCatching{AppSecurity.setPin(context,pin)}.exceptionOrNull()?.message;if(error==null){hasPin=true;showPinDialog=false;message=s("تم حفظ PIN المكوّن من 6 أرقام","6-digit PIN saved","6 haneli PIN kaydedildi","PIN à 6 chiffres enregistré","6-stellige PIN gespeichert","PIN de 6 dígitos guardado");onSecurityChanged()}else message=localizedSecurityError(error,lang)}
 }
 
 @Composable
-private fun SecuritySwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    enabled: Boolean = true,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-            Text(title, color = FlosiText)
-            Text(subtitle, color = FlosiMuted)
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
+fun FlosiLockScreen(onUnlocked:()->Unit){
+    val context=androidx.compose.ui.platform.LocalContext.current;val lang=LocalFlosiLanguage.current;fun s(ar:String,en:String,tr:String,fr:String,de:String,es:String)=securityText(lang,ar,en,tr,fr,de,es)
+    val activity=remember(context){context.findFragmentActivity()};var pin by remember{mutableStateOf("")};var error by remember{mutableStateOf<String?>(null)};val biometricEnabled=AppSecurity.biometricEnabled(context);val biometricAvailable=AppSecurity.biometricAvailable(context);val hasPin=AppSecurity.hasPin(context);var prompted by remember{mutableStateOf(false)}
+    fun unlockWithBiometric(){val host=activity;if(host==null){error=if(hasPin)s("تعذر تشغيل البصمة. استخدم PIN.","Biometrics unavailable. Use PIN.","Biyometri kullanılamıyor. PIN kullan.","Biométrie indisponible. Utilisez le PIN.","Biometrie nicht verfügbar. PIN verwenden.","Biometría no disponible. Usa el PIN.")else s("تعذر تشغيل البصمة أو الوجه.","Biometrics unavailable.","Biyometri kullanılamıyor.","Biométrie indisponible.","Biometrie nicht verfügbar.","Biometría no disponible.");return};AppSecurity.authenticateBiometric(activity=host,onSuccess={error=null;onUnlocked()},onUnavailable={error=localizedSecurityError(it,lang)},onUsePin={error=null})}
+    LaunchedEffect(biometricEnabled,biometricAvailable){if(biometricEnabled&&biometricAvailable&&!prompted){prompted=true;unlockWithBiometric()}}
+    Surface(color=FlosiBg,modifier=Modifier.fillMaxSize()){Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){Surface(color=FlosiPurpleSoft,shape=MaterialTheme.shapes.extraLarge){Text("◆",modifier=Modifier.padding(horizontal=22.dp,vertical=16.dp),color=FlosiPurple)};Spacer(Modifier.height(18.dp));Text(s("Flosi مقفول","Flosi is locked","Flosi kilitli","Flosi est verrouillé","Flosi ist gesperrt","Flosi está bloqueado"),style=MaterialTheme.typography.headlineSmall,color=FlosiText);Spacer(Modifier.height(6.dp));Text(s("تحقق قبل عرض بياناتك المالية","Verify before viewing your financial data","Finansal verilerini görüntülemeden önce doğrula","Vérifiez votre identité avant d’afficher vos données financières","Bestätige dich, bevor Finanzdaten angezeigt werden","Verifica tu identidad antes de ver tus datos financieros"),color=FlosiMuted);Spacer(Modifier.height(22.dp))
+        if(hasPin){OutlinedTextField(value=pin,onValueChange={pin=it.filter(Char::isDigit).take(6);error=null},modifier=Modifier.fillMaxWidth(),label={Text(flosiText("pin_6"))},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),visualTransformation=PasswordVisualTransformation(),singleLine=true);Spacer(Modifier.height(10.dp));Button(onClick={if(AppSecurity.verifyPin(context,pin)){AppSecurity.markUnlocked(context);pin="";error=null;onUnlocked()}else error=s("PIN غير صحيح","Incorrect PIN","PIN yanlış","PIN incorrect","Falsche PIN","PIN incorrecto")},enabled=pin.length==6,modifier=Modifier.fillMaxWidth()){Text(s("فتح","Unlock","Aç","Déverrouiller","Entsperren","Desbloquear"))}}
+        if(biometricEnabled){Spacer(Modifier.height(8.dp));OutlinedButton(onClick=::unlockWithBiometric,enabled=biometricAvailable,modifier=Modifier.fillMaxWidth()){Text(if(biometricAvailable)s("استخدام البصمة أو الوجه","Use fingerprint or face","Parmak izi veya yüz kullan","Utiliser empreinte ou visage","Fingerabdruck oder Gesicht verwenden","Usar huella o rostro")else s("القياسات الحيوية غير متاحة — استخدم PIN","Biometrics unavailable — use PIN","Biyometri kullanılamıyor — PIN kullan","Biométrie indisponible — utilisez le PIN","Biometrie nicht verfügbar — PIN verwenden","Biometría no disponible — usa PIN"))}}
+        error?.let{Spacer(Modifier.height(12.dp));Text(it,color=FlosiRed)}
+    }}
 }
 
-@Composable
-private fun PinSetupDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var pin by remember { mutableStateOf("") }
-    var confirm by remember { mutableStateOf("") }
-    val valid = pin.matches(Regex("\\d{6}")) && pin == confirm
+@Composable private fun SecuritySwitchRow(title:String,subtitle:String,checked:Boolean,enabled:Boolean=true,onCheckedChange:(Boolean)->Unit){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text(title,color=FlosiText);Text(subtitle,color=FlosiMuted)};Switch(checked=checked,onCheckedChange=onCheckedChange,enabled=enabled)}}
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("تعيين PIN") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("أدخل 6 أرقام فقط. PIN اختياري ويمكن إيقافه لاحقاً من صفحة الأمان.", color = FlosiMuted)
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { pin = it.filter(Char::isDigit).take(6) },
-                    label = { Text("PIN الجديد") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = confirm,
-                    onValueChange = { confirm = it.filter(Char::isDigit).take(6) },
-                    label = { Text("تأكيد PIN") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                )
-                if (confirm.isNotEmpty() && pin != confirm) Text("الرمزان غير متطابقين", color = FlosiRed)
-            }
-        },
-        confirmButton = { Button(onClick = { onSave(pin) }, enabled = valid) { Text(flosiText("save")) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(flosiText("cancel")) } },
-    )
+@Composable private fun PinSetupDialog(onDismiss:()->Unit,onSave:(String)->Unit){
+    val lang=LocalFlosiLanguage.current;fun s(ar:String,en:String,tr:String,fr:String,de:String,es:String)=securityText(lang,ar,en,tr,fr,de,es);var pin by remember{mutableStateOf("")};var confirm by remember{mutableStateOf("")};val valid=pin.matches(Regex("\\d{6}"))&&pin==confirm
+    AlertDialog(onDismissRequest=onDismiss,title={Text(s("تعيين PIN","Set PIN","PIN ayarla","Définir le PIN","PIN festlegen","Configurar PIN"))},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text(s("أدخل 6 أرقام فقط. PIN اختياري ويمكن إيقافه لاحقاً من صفحة الأمان.","Enter exactly 6 digits. PIN can be disabled later from Security.","Tam 6 rakam gir. PIN daha sonra Güvenlik sayfasından kapatılabilir.","Saisissez exactement 6 chiffres. Le PIN peut être désactivé plus tard depuis Sécurité.","Gib genau 6 Ziffern ein. Die PIN kann später unter Sicherheit deaktiviert werden.","Introduce exactamente 6 dígitos. El PIN puede desactivarse después desde Seguridad."),color=FlosiMuted);OutlinedTextField(value=pin,onValueChange={pin=it.filter(Char::isDigit).take(6)},label={Text(s("PIN الجديد","New PIN","Yeni PIN","Nouveau PIN","Neue PIN","PIN nuevo"))},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),visualTransformation=PasswordVisualTransformation(),singleLine=true);OutlinedTextField(value=confirm,onValueChange={confirm=it.filter(Char::isDigit).take(6)},label={Text(s("تأكيد PIN","Confirm PIN","PIN'i doğrula","Confirmer le PIN","PIN bestätigen","Confirmar PIN"))},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),visualTransformation=PasswordVisualTransformation(),singleLine=true);if(confirm.isNotEmpty()&&pin!=confirm)Text(s("الرمزان غير متطابقين","PINs do not match","PIN'ler eşleşmiyor","Les PIN ne correspondent pas","PINs stimmen nicht überein","Los PIN no coinciden"),color=FlosiRed)}},confirmButton={Button(onClick={onSave(pin)},enabled=valid){Text(flosiText("save"))}},dismissButton={TextButton(onClick=onDismiss){Text(flosiText("cancel"))}})
 }
 
-private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
-    is FragmentActivity -> this
-    is ContextWrapper -> baseContext.findFragmentActivity()
-    else -> null
-}
+private tailrec fun Context.findFragmentActivity():FragmentActivity?=when(this){is FragmentActivity->this;is ContextWrapper->baseContext.findFragmentActivity();else->null}
