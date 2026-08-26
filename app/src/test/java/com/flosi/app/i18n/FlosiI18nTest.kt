@@ -6,27 +6,33 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FlosiI18nTest {
-    @Test
-    fun allSupportedLocalesResolveCoreNavigationWithoutKeys() {
-        val core = listOf("today","activity","people","me","add","back","save","cancel","accounts","security","language","income","expense","amount","account","category","reports","goals","budgets","commitments","invoices","settings","notifications","transfer","bank","wallet","cash")
-        assertEquals(24, FlosiLocales.all.size)
-        FlosiLocales.all.forEach { locale ->
-            core.forEach { key ->
-                val value = FlosiI18n.text(locale.code, key)
-                assertTrue("blank $key for ${locale.code}", value.isNotBlank())
-                assertFalse("raw key leaked: $key for ${locale.code}", value == key)
+    @Test fun onlySixLaunchLocalesAreExposed() {
+        assertEquals(setOf("ar","en","tr","fr","de","es"), FlosiLocales.codes)
+        assertEquals(6, FlosiLocales.all.size)
+    }
+
+    @Test fun everyLaunchLocaleResolvesEveryCoreKey() {
+        FlosiLocales.codes.forEach { language ->
+            assertTrue("Missing $language keys: ${FlosiI18n.missingKeys(language)}", FlosiI18n.missingKeys(language).isEmpty())
+            FlosiI18n.requiredKeys.forEach { key ->
+                val value=FlosiI18n.text(language,key)
+                assertTrue("blank $key for $language",value.isNotBlank())
+                assertFalse("raw key leaked: $key for $language",value==key)
             }
         }
     }
 
-    @Test
-    fun rtlLocalesAreExplicitAndStable() {
-        val rtl = FlosiLocales.all.filter { it.rtl }.map { it.code }.toSet()
-        assertEquals(setOf("ar","fa","ur","he"), rtl)
+    @Test fun everyLegacyPhraseIsTranslatedForEveryNonArabicLaunchLocale() {
+        setOf("en","tr","fr","de","es").forEach { language ->
+            assertTrue("Missing legacy $language: ${legacyMissingTranslations(language)}",legacyMissingTranslations(language).isEmpty())
+        }
     }
 
-    @Test
-    fun unsupportedLocaleFallsBackToAppDefaultSafely() {
-        assertEquals("اليوم", FlosiI18n.text("xx", "today"))
+    @Test fun arabicIsTheOnlyRtlLaunchLocale() {
+        assertEquals(setOf("ar"),FlosiLocales.all.filter{it.rtl}.map{it.code}.toSet())
+    }
+
+    @Test fun unsupportedLocaleFallsBackToArabicSafely() {
+        assertEquals("اليوم",FlosiI18n.text("xx","today"))
     }
 }
