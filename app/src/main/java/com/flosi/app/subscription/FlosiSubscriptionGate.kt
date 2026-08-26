@@ -3,11 +3,14 @@ package com.flosi.app.subscription
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.android.billingclient.api.*
@@ -27,15 +30,19 @@ import kotlin.math.ceil
 private const val TRIAL_DAYS = 30L
 private const val DAY_MS = 86_400_000L
 private const val ENTITLEMENT_GRACE_MS = 3L * DAY_MS
-private const val TRIAL_ROLLOUT_MS = 1_787_574_600_000L // 2026-08-24 12:30 UTC
+private const val TRIAL_ROLLOUT_MS = 1_787_574_600_000L
 private const val FLOSI_AUTH_APP_NAME = "flosi-auth"
+
+enum class SubscriptionPlan { MONTHLY, ANNUAL }
+
+data class PlanPrice(val monthly: String? = null, val annual: String? = null)
 
 sealed interface SubscriptionState {
     data object Checking : SubscriptionState
     data class Trial(val daysRemaining: Int) : SubscriptionState
     data object Active : SubscriptionState
-    data class Expired(val priceLabel: String? = null) : SubscriptionState
-    data class Error(val message: String) : SubscriptionState
+    data class Expired(val prices: PlanPrice = PlanPrice()) : SubscriptionState
+    data class Error(val message: String, val prices: PlanPrice = PlanPrice()) : SubscriptionState
 }
 
 class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedListener {
@@ -44,8 +51,12 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
     private val _state = MutableStateFlow<SubscriptionState>(SubscriptionState.Checking)
     val state: StateFlow<SubscriptionState> = _state
 
-    private var productDetails: ProductDetails? = null
+    private var products: Map<String, ProductDetails> = emptyMap()
     private var started = false
+    private val supportedProductIds get() = setOf(
+        BuildConfig.FLOSI_SUBSCRIPTION_PRODUCT_ID,
+        BuildConfig.FLOSI_ANNUAL_SUBSCRIPTION_PRODUCT_ID
+    )
 
     private val billingClient = BillingClient.newBuilder(context)
         .setListener(this)
@@ -57,16 +68,10 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         started = true
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
-                if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                    scope.launch { refresh() }
-                } else {
-                    scope.launch { refreshWithoutBilling() }
-                }
+                if (result.responseCode == BillingClient.BillingResponseCode.OK) scope.launch { refresh() }
+                else scope.launch { refreshWithoutBilling() }
             }
-
-            override fun onBillingServiceDisconnected() {
-                scope.launch { refreshWithoutBilling() }
-            }
+            override fun onBillingServiceDisconnected() { scope.launch { refreshWithoutBilling() } }
         })
     }
 
@@ -77,13 +82,12 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
 
     suspend fun refresh() {
         _state.value = SubscriptionState.Checking
-        val active = queryActiveSubscription()
-        if (active) {
+        if (queryActiveSubscription()) {
             markEntitledNow()
             _state.value = SubscriptionState.Active
             return
         }
-        productDetails = queryProductDetails()
+        products = queryProductDetails().associateBy { it.productId }
         evaluateTrialOrExpiry()
     }
 
@@ -104,12 +108,12 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
     private suspend fun evaluateTrialOrExpiry() {
         val user = authenticatedUser()
         if (user == null) {
-            _state.value = SubscriptionState.Error("تعذر التحقق من حساب Flosi")
+            _state.value = SubscriptionState.Error("تعذر التحقق من حساب Flosi", currentPrices())
             return
         }
         val createdAt = user.metadata?.creationTimestamp ?: 0L
         if (createdAt <= 0L) {
-            _state.value = SubscriptionState.Error("تعذر تحديد بداية الفترة المجانية")
+            _state.value = SubscriptionState.Error("تعذر تحديد بداية الفترة المجانية", currentPrices())
             return
         }
         val now = trustedNow(user)
@@ -119,7 +123,7 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
             val days = ceil((expiry - now).toDouble() / DAY_MS.toDouble()).toInt().coerceAtLeast(1)
             _state.value = SubscriptionState.Trial(days)
         } else {
-            _state.value = SubscriptionState.Expired(currentPriceLabel())
+            _state.value = SubscriptionState.Expired(currentPrices())
         }
     }
 
@@ -136,32 +140,24 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         val result = billingClient.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()
         )
-        val purchase = result.purchasesList.firstOrNull {
-            it.products.contains(BuildConfig.FLOSI_SUBSCRIPTION_PRODUCT_ID) &&
-                it.purchaseState == Purchase.PurchaseState.PURCHASED
+        val purchase = result.purchasesList.firstOrNull { purchase ->
+            purchase.products.any { it in supportedProductIds } &&
+                purchase.purchaseState == Purchase.PurchaseState.PURCHASED
         } ?: return false
         acknowledgeIfNeeded(purchase)
         return true
     }
 
-    private suspend fun queryProductDetails(): ProductDetails? {
-        if (!billingClient.isReady) return null
-        val params = QueryProductDetailsParams.newBuilder()
-            .setProductList(
-                listOf(
-                    QueryProductDetailsParams.Product.newBuilder()
-                        .setProductId(BuildConfig.FLOSI_SUBSCRIPTION_PRODUCT_ID)
-                        .setProductType(BillingClient.ProductType.SUBS)
-                        .build()
-                )
-            )
-            .build()
-        return billingClient.queryProductDetails(params).productDetailsList?.firstOrNull()
-    }
-
-    private fun currentPriceLabel(): String? {
-        val offer = preferredOffer(productDetails ?: return null) ?: return null
-        return offer.pricingPhases.pricingPhaseList.lastOrNull()?.formattedPrice
+    private suspend fun queryProductDetails(): List<ProductDetails> {
+        if (!billingClient.isReady) return emptyList()
+        val productList = supportedProductIds.map { id ->
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(id)
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build()
+        }
+        val params = QueryProductDetailsParams.newBuilder().setProductList(productList).build()
+        return billingClient.queryProductDetails(params).productDetailsList.orEmpty()
     }
 
     private fun preferredOffer(details: ProductDetails): ProductDetails.SubscriptionOfferDetails? {
@@ -171,16 +167,34 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         } ?: offers.firstOrNull()
     }
 
-    fun launchPurchase(activity: Activity) {
-        val details = productDetails
+    private fun priceFor(productId: String): String? {
+        val details = products[productId] ?: return null
+        val offer = preferredOffer(details) ?: return null
+        return offer.pricingPhases.pricingPhaseList.lastOrNull()?.formattedPrice
+    }
+
+    private fun currentPrices() = PlanPrice(
+        monthly = priceFor(BuildConfig.FLOSI_SUBSCRIPTION_PRODUCT_ID),
+        annual = priceFor(BuildConfig.FLOSI_ANNUAL_SUBSCRIPTION_PRODUCT_ID)
+    )
+
+    fun launchPurchase(activity: Activity, plan: SubscriptionPlan) {
+        val productId = when (plan) {
+            SubscriptionPlan.MONTHLY -> BuildConfig.FLOSI_SUBSCRIPTION_PRODUCT_ID
+            SubscriptionPlan.ANNUAL -> BuildConfig.FLOSI_ANNUAL_SUBSCRIPTION_PRODUCT_ID
+        }
+        val details = products[productId]
         val offer = details?.let(::preferredOffer)
         if (details == null || offer == null || !billingClient.isReady) {
             scope.launch {
-                productDetails = queryProductDetails()
-                val retryDetails = productDetails
+                products = queryProductDetails().associateBy { it.productId }
+                val retryDetails = products[productId]
                 val retryOffer = retryDetails?.let(::preferredOffer)
                 if (retryDetails == null || retryOffer == null) {
-                    _state.value = SubscriptionState.Error("تعذر تحميل الاشتراك من Google Play. تأكد من نشر المنتج ${BuildConfig.FLOSI_SUBSCRIPTION_PRODUCT_ID} في Play Console.")
+                    _state.value = SubscriptionState.Error(
+                        "تعذر تحميل خطة الاشتراك من Google Play. تأكد من تفعيل المنتج $productId في Play Console.",
+                        currentPrices()
+                    )
                     return@launch
                 }
                 launchBillingFlow(activity, retryDetails, retryOffer)
@@ -190,11 +204,7 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         launchBillingFlow(activity, details, offer)
     }
 
-    private fun launchBillingFlow(
-        activity: Activity,
-        details: ProductDetails,
-        offer: ProductDetails.SubscriptionOfferDetails
-    ) {
+    private fun launchBillingFlow(activity: Activity, details: ProductDetails, offer: ProductDetails.SubscriptionOfferDetails) {
         val product = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
             .setOfferToken(offer.offerToken)
@@ -202,21 +212,27 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         val params = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(product)).build()
         val result = billingClient.launchBillingFlow(activity, params)
         if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-            _state.value = SubscriptionState.Error(result.debugMessage.ifBlank { "تعذر فتح شاشة الاشتراك" })
+            _state.value = SubscriptionState.Error(
+                result.debugMessage.ifBlank { "تعذر فتح شاشة الاشتراك" },
+                currentPrices()
+            )
         }
     }
 
     override fun onPurchasesUpdated(result: BillingResult, purchases: MutableList<Purchase>?) {
         when (result.responseCode) {
             BillingClient.BillingResponseCode.OK -> scope.launch {
-                purchases.orEmpty().filter {
-                    it.products.contains(BuildConfig.FLOSI_SUBSCRIPTION_PRODUCT_ID) &&
-                        it.purchaseState == Purchase.PurchaseState.PURCHASED
+                purchases.orEmpty().filter { purchase ->
+                    purchase.products.any { it in supportedProductIds } &&
+                        purchase.purchaseState == Purchase.PurchaseState.PURCHASED
                 }.forEach { acknowledgeIfNeeded(it) }
                 refresh()
             }
             BillingClient.BillingResponseCode.USER_CANCELED -> Unit
-            else -> _state.value = SubscriptionState.Error(result.debugMessage.ifBlank { "تعذر إكمال الاشتراك" })
+            else -> _state.value = SubscriptionState.Error(
+                result.debugMessage.ifBlank { "تعذر إكمال الاشتراك" },
+                currentPrices()
+            )
         }
     }
 
@@ -256,9 +272,7 @@ fun FlosiSubscriptionGate(content: @Composable () -> Unit) {
     }
 
     when (val current = state) {
-        SubscriptionState.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
+        SubscriptionState.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         is SubscriptionState.Trial -> Box(Modifier.fillMaxSize()) {
             content()
             Surface(
@@ -275,14 +289,14 @@ fun FlosiSubscriptionGate(content: @Composable () -> Unit) {
         }
         SubscriptionState.Active -> content()
         is SubscriptionState.Expired -> SubscriptionPaywall(
-            priceLabel = current.priceLabel,
-            onSubscribe = { activity?.let(manager::launchPurchase) },
+            prices = current.prices,
+            onSubscribe = { plan -> activity?.let { manager.launchPurchase(it, plan) } },
             onRestore = { CoroutineScope(Dispatchers.Main).launch { manager.refresh() } }
         )
         is SubscriptionState.Error -> SubscriptionPaywall(
-            priceLabel = null,
+            prices = current.prices,
             message = current.message,
-            onSubscribe = { activity?.let(manager::launchPurchase) },
+            onSubscribe = { plan -> activity?.let { manager.launchPurchase(it, plan) } },
             onRestore = { CoroutineScope(Dispatchers.Main).launch { manager.refresh() } }
         )
     }
@@ -290,40 +304,79 @@ fun FlosiSubscriptionGate(content: @Composable () -> Unit) {
 
 @Composable
 private fun SubscriptionPaywall(
-    priceLabel: String?,
+    prices: PlanPrice,
     message: String? = null,
-    onSubscribe: () -> Unit,
+    onSubscribe: (SubscriptionPlan) -> Unit,
     onRestore: () -> Unit
 ) {
+    var selected by remember { mutableStateOf(SubscriptionPlan.ANNUAL) }
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Card {
+        Card(shape = RoundedCornerShape(28.dp)) {
             Column(
                 Modifier.fillMaxWidth().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("Flosi", style = MaterialTheme.typography.headlineMedium)
+                Text("Flosi Premium", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
                 Text("انتهت الفترة المجانية", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "استخدمت Flosi مجاناً لمدة 30 يوماً. بياناتك محفوظة بالكامل ولن تُحذف.",
+                    "بياناتك محفوظة بالكامل. اختَر الخطة المناسبة حتى تكمل تستخدم كل ميزات Flosi.",
                     textAlign = TextAlign.Center
                 )
-                if (!priceLabel.isNullOrBlank()) {
-                    Text("الاشتراك الشهري: $priceLabel", style = MaterialTheme.typography.titleMedium)
-                }
+
+                PlanOption(
+                    title = "سنوي",
+                    subtitle = "أفضل قيمة للاستخدام الطويل",
+                    price = prices.annual ?: "يظهر السعر من Google Play",
+                    selected = selected == SubscriptionPlan.ANNUAL,
+                    onClick = { selected = SubscriptionPlan.ANNUAL }
+                )
+                PlanOption(
+                    title = "شهري",
+                    subtitle = "مرونة بالدفع كل شهر",
+                    price = prices.monthly ?: "يظهر السعر من Google Play",
+                    selected = selected == SubscriptionPlan.MONTHLY,
+                    onClick = { selected = SubscriptionPlan.MONTHLY }
+                )
+
                 message?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
-                Button(onClick = onSubscribe, modifier = Modifier.fillMaxWidth()) {
-                    Text("الاشتراك عبر Google Play")
+
+                Button(onClick = { onSubscribe(selected) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (selected == SubscriptionPlan.ANNUAL) "اشترك سنوياً عبر Google Play" else "اشترك شهرياً عبر Google Play")
                 }
-                OutlinedButton(onClick = onRestore, modifier = Modifier.fillMaxWidth()) {
-                    Text("استعادة الاشتراك")
-                }
+                OutlinedButton(onClick = onRestore, modifier = Modifier.fillMaxWidth()) { Text("استعادة الاشتراك") }
                 Text(
-                    "يمكنك إلغاء الاشتراك من Google Play في أي وقت.",
+                    "الدفع والتجديد والإلغاء تتم عبر Google Play، ويمكنك الإلغاء من إعدادات المتجر بأي وقت.",
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PlanOption(
+    title: String,
+    subtitle: String,
+    price: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = if (selected) 2.dp else 0.dp
+    ) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            RadioButton(selected = selected, onClick = onClick)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.ExtraBold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(price, fontWeight = FontWeight.Bold)
         }
     }
 }
