@@ -82,17 +82,63 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
 
     suspend fun refresh() {
         _state.value = SubscriptionState.Checking
-        if (queryActiveSubscription()) {
+        val user = authenticatedUser()
+        if (user == null) {
+            _state.value = SubscriptionState.Error("تعذر التحقق من حساب Flosi", currentPrices())
+            return
+        }
+
+        products = queryProductDetails().associateBy { it.productId }
+        val purchase = queryActiveSubscriptionPurchase()
+
+        if (SubscriptionEntitlementApi.configured()) {
+            val productId = purchase?.products?.firstOrNull { it in supportedProductIds }
+            val server = SubscriptionEntitlementApi.check(context, user, purchase?.purchaseToken, productId)
+            if (server == null) {
+                if (purchase != null && hasRecentVerifiedEntitlement()) {
+                    _state.value = SubscriptionState.Active
+                } else {
+                    _state.value = SubscriptionState.Error("تعذر التحقق الآمن من الاشتراك. تحقق من الإنترنت وحاول مجدداً.", currentPrices())
+                }
+                return
+            }
+            updateTrustedNow(server.serverNow)
+            if (server.active) {
+                purchase?.let(::acknowledgeIfNeeded)
+                markEntitledNow()
+                _state.value = SubscriptionState.Active
+                return
+            }
+            evaluateServerTrial(server)
+            return
+        }
+
+        if (purchase != null) {
+            acknowledgeIfNeeded(purchase)
             markEntitledNow()
             _state.value = SubscriptionState.Active
             return
         }
-        products = queryProductDetails().associateBy { it.productId }
         evaluateTrialOrExpiry()
     }
 
     private suspend fun refreshWithoutBilling() {
         _state.value = SubscriptionState.Checking
+        val user = authenticatedUser()
+        if (user == null) {
+            _state.value = SubscriptionState.Error("تعذر التحقق من حساب Flosi", currentPrices())
+            return
+        }
+        if (SubscriptionEntitlementApi.configured()) {
+            val server = SubscriptionEntitlementApi.check(context, user)
+            if (server != null) {
+                updateTrustedNow(server.serverNow)
+                if (server.active) {
+                    markEntitledNow(); _state.value = SubscriptionState.Active; return
+                }
+                evaluateServerTrial(server); return
+            }
+        }
         if (hasRecentVerifiedEntitlement()) {
             _state.value = SubscriptionState.Active
             return
@@ -103,6 +149,16 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
     private fun authenticatedUser(): FirebaseUser? {
         val app = FirebaseApp.getApps(context).firstOrNull { it.name == FLOSI_AUTH_APP_NAME } ?: return null
         return FirebaseAuth.getInstance(app).currentUser
+    }
+
+    private fun evaluateServerTrial(server: ServerEntitlement) {
+        val expiry = server.trialEndsAt
+        if (expiry == null || server.serverNow >= expiry) {
+            _state.value = SubscriptionState.Expired(currentPrices())
+            return
+        }
+        val days = ceil((expiry - server.serverNow).toDouble() / DAY_MS.toDouble()).toInt().coerceAtLeast(1)
+        _state.value = SubscriptionState.Trial(days)
     }
 
     private suspend fun evaluateTrialOrExpiry() {
@@ -131,21 +187,24 @@ class FlosiSubscriptionManager(private val context: Context) : PurchasesUpdatedL
         val stored = prefs.getLong("trusted_now", 0L)
         val issuedAt = runCatching { user.getIdToken(true).await().issuedAtTimestamp }.getOrNull() ?: 0L
         val candidate = maxOf(stored, issuedAt)
-        if (candidate > stored) prefs.edit().putLong("trusted_now", candidate).apply()
+        updateTrustedNow(candidate)
         return if (candidate > 0L) candidate else maxOf(stored, System.currentTimeMillis())
     }
 
-    private suspend fun queryActiveSubscription(): Boolean {
-        if (!billingClient.isReady) return false
+    private fun updateTrustedNow(value: Long) {
+        val stored = prefs.getLong("trusted_now", 0L)
+        if (value > stored) prefs.edit().putLong("trusted_now", value).apply()
+    }
+
+    private suspend fun queryActiveSubscriptionPurchase(): Purchase? {
+        if (!billingClient.isReady) return null
         val result = billingClient.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()
         )
-        val purchase = result.purchasesList.firstOrNull { purchase ->
+        return result.purchasesList.firstOrNull { purchase ->
             purchase.products.any { it in supportedProductIds } &&
                 purchase.purchaseState == Purchase.PurchaseState.PURCHASED
-        } ?: return false
-        acknowledgeIfNeeded(purchase)
-        return true
+        }
     }
 
     private suspend fun queryProductDetails(): List<ProductDetails> {
