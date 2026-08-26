@@ -137,12 +137,15 @@ fun SectionTitle(title: String, action: String? = null, onAction: () -> Unit = {
 }
 
 @Composable
-fun EmptyState(title: String, subtitle: String = "", action: String? = null, onAction: (() -> Unit)? = null) {
+fun EmptyState(title: String, subtitle: String = "", action: String? = null, symbol: String? = null, onAction: (() -> Unit)? = null) {
     AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn(initialScale = .96f), exit = fadeOut() + scaleOut(targetScale = .96f)) {
         CardBox {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.size(58.dp).background(FlosiPurpleSoft, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Default.Inbox, null, tint = FlosiPurple, modifier = Modifier.size(26.dp)) }
+                    Box(Modifier.size(58.dp).background(FlosiPurpleSoft, CircleShape), contentAlignment = Alignment.Center) {
+                        if (symbol.isNullOrBlank()) Icon(Icons.Default.Inbox, null, tint = FlosiPurple, modifier = Modifier.size(26.dp))
+                        else Text(symbol, color = FlosiPurple, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                    }
                     Text(localizedLegacyText(title), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
                     if (subtitle.isNotBlank()) Text(localizedLegacyText(subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     if (action != null && onAction != null) Button(onClick = onAction, shape = RoundedCornerShape(16.dp)) { Text(localizedLegacyText(action)) }
