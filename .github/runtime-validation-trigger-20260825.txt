@@ -1,0 +1,1 @@
+Trigger runtime validation after fixed APK path.
